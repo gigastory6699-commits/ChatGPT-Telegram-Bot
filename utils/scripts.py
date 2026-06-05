@@ -146,7 +146,14 @@ async def GetMesageInfo(update, context, voice=True):
 def safe_get(data, *keys):
     for key in keys:
         try:
-            data = data[key] if isinstance(data, (dict, list)) else data.get(key)
+            if isinstance(data, (dict, list)):
+                data = data[key]
+            elif isinstance(key, int):
+                data = data[key]
+            elif isinstance(key, str) and hasattr(data, key):
+                data = getattr(data, key)
+            else:
+                data = data.get(key)
         except (KeyError, IndexError, AttributeError, TypeError):
             return None
     return data

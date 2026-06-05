@@ -52,6 +52,7 @@ PREFERENCES = {
     "TITLE"             : (os.environ.get('TITLE', "False") == "False") == False,
     # "TYPING"            : (os.environ.get('TYPING', "False") == "False") == False,
     "REPLY"             : (os.environ.get('REPLY', "False") == "False") == False,
+    "VOICE_REPLY"       : (os.environ.get('VOICE_REPLY', "False") == "False") == False,
 }
 
 LANGUAGE = os.environ.get('LANGUAGE', 'English')
@@ -61,6 +62,7 @@ LANGUAGES = {
     "Simplified Chinese": False,
     "Traditional Chinese": False,
     "Russian": False,
+    "Arabic": False,
 }
 
 LANGUAGES_TO_CODE = {
@@ -68,6 +70,7 @@ LANGUAGES_TO_CODE = {
     "Simplified Chinese": "zh",
     "Traditional Chinese": "zh-hk",
     "Russian": "ru",
+    "Arabic": "ar",
 }
 
 current_date = datetime.now()
@@ -84,17 +87,7 @@ CONFIG_DIR = os.environ.get('CONFIG_DIR', 'user_configs')
 @contextmanager
 def file_lock(filename):
     if os.name == 'nt':  # Windows系统
-        import msvcrt
-        with open(filename, 'a+') as f:
-            try:
-                msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
-                yield f
-            finally:
-                try:
-                    f.seek(0)
-                    msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
-                except:
-                    pass  # 如果解锁失败，我们也不能做太多
+        yield None
     else:  # Unix-like系统
         import fcntl
         with open(filename, 'a+') as f:
@@ -201,6 +194,11 @@ class UserConfig:
                 for new_plugin, status in self.plugins.items():
                     if new_plugin not in user_config:
                         user_config[new_plugin] = status
+                        updated_config = True
+
+                for new_pref, status in self.preferences.items():
+                    if new_pref not in user_config:
+                        user_config[new_pref] = status
                         updated_config = True
 
                 # 如果配置有更新，保存回文件
@@ -724,6 +722,10 @@ def update_menu_buttons(setting, _strings, chatid):
     lang = get_current_lang(chatid)
     setting_list = list(setting.keys())
     buttons = create_buttons(setting_list, plugins_status=True, lang=lang, button_text=strings, chatid=chatid, Suffix=_strings)
+    if _strings == "_PLUGINS":
+        buttons.insert(0, [
+            InlineKeyboardButton("ربط واتساب / Link WhatsApp 💬", callback_data="LINK_WHATSAPP"),
+        ])
     buttons.append(
         [
             InlineKeyboardButton(strings['button_back'][lang], callback_data="BACK"),

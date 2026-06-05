@@ -1,0 +1,203 @@
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const pino = require('pino');
+const express = require('express');
+const bodyParser = require('body-parser');
+const axios = require('axios');
+const dotenv = require('dotenv');
+const fs = require('fs');
+const QRCode = require('qrcode');
+
+dotenv.config({ path: '../.env' });
+
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const PORT = 5001;
+
+let sock = null;
+let qrCode = null;
+let connectionState = 'DISCONNECTED';
+let telegramChatId = null;
+
+const app = express();
+app.use(bodyParser.json());
+
+async function sendTelegramMessage(text) {
+    if (!BOT_TOKEN || !telegramChatId) {
+        console.error("Missing BOT_TOKEN or telegramChatId", { BOT_TOKEN, telegramChatId });
+        return;
+    }
+    const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+    try {
+        await axios.post(url, {
+            chat_id: telegramChatId,
+            text: text,
+            parse_mode: 'HTML'
+        });
+        console.log("Notification sent to Telegram");
+    } catch (e) {
+        console.error("Failed to send Telegram message:", e.response ? e.response.data : e.message);
+    }
+}
+
+async function handleIncomingWhatsAppMessage(msg) {
+    const senderJid = msg.key.remoteJid;
+    const senderNumber = senderJid.split('@')[0];
+    const senderName = msg.pushName || senderNumber;
+    
+    // Extract text content
+    let text = "";
+    if (msg.message.conversation) {
+        text = msg.message.conversation;
+    } else if (msg.message.extendedTextMessage) {
+        text = msg.message.extendedTextMessage.text;
+    } else if (msg.message.imageMessage) {
+        text = `[صورة] ${msg.message.imageMessage.caption || ''}`;
+    } else if (msg.message.videoMessage) {
+        text = `[فيديو] ${msg.message.videoMessage.caption || ''}`;
+    } else if (msg.message.documentMessage) {
+        text = `[ملف] ${msg.message.documentMessage.fileName || ''}`;
+    } else if (msg.message.audioMessage) {
+        text = `[صوت]`;
+    } else {
+        text = `[رسالة غير مدعومة]`;
+    }
+    
+    const notification = 
+        `💬 <b>رسالة جديدة من واتساب</b>\n\n` +
+        `👤 <b>المرسل:</b> ${senderName}\n` +
+        `📱 <b>الرقم:</b> <code>+${senderNumber}</code>\n\n` +
+        `📝 <b>الرسالة:</b>\n${text}\n\n` +
+        `_________________\n` +
+        `<i>رد على هذه الرسالة للرد على المرسل في واتساب.</i>\n` +
+        `[From: <code>${senderJid}</code>]`;
+        
+    await sendTelegramMessage(notification);
+}
+
+async function initWhatsApp(chatId, pairPhone = null) {
+    telegramChatId = chatId;
+    
+    if (!fs.existsSync('session')) {
+        fs.mkdirSync('session');
+    }
+    fs.writeFileSync('session/telegram_chat_id.txt', chatId);
+
+    if (sock && !pairPhone) {
+        return null;
+    }
+
+    const { state, saveCreds } = await useMultiFileAuthState('session');
+    
+    sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: false,
+        logger: pino({ level: 'silent' })
+    });
+    
+    sock.ev.on('creds.update', saveCreds);
+    
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr } = update;
+        if (qr) {
+            qrCode = qr;
+            await QRCode.toFile('./session/qr.png', qr);
+            console.log("QR code saved to session/qr.png");
+        }
+        
+        if (connection === 'close') {
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('Connection closed. Reconnecting:', shouldReconnect);
+            sock = null;
+            connectionState = 'DISCONNECTED';
+            if (shouldReconnect) {
+                initWhatsApp(telegramChatId);
+            }
+        } else if (connection === 'open') {
+            console.log('WhatsApp connection opened successfully!');
+            connectionState = 'CONNECTED';
+            qrCode = null;
+            sendTelegramMessage("✅ <b>تم ربط واتساب بنجاح!</b>\nالبوت متصل الآن ويمكنه استقبال وإرسال رسائل واتساب.");
+        }
+    });
+    
+    sock.ev.on('messages.upsert', async (m) => {
+        if (m.type === 'notify') {
+            for (const msg of m.messages) {
+                if (!msg.key.fromMe && msg.message) {
+                    await handleIncomingWhatsAppMessage(msg);
+                }
+            }
+        }
+    });
+    
+    if (pairPhone) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        try {
+            let code = await sock.requestPairingCode(pairPhone);
+            return code;
+        } catch (e) {
+            console.error("Pairing code error:", e);
+            throw e;
+        }
+    }
+    
+    return null;
+}
+
+// Auto-restore session if exists
+if (fs.existsSync('session/creds.json') && fs.existsSync('session/telegram_chat_id.txt')) {
+    try {
+        telegramChatId = fs.readFileSync('session/telegram_chat_id.txt', 'utf-8').trim();
+        if (telegramChatId) {
+            console.log("Auto-restoring WhatsApp connection for chatId:", telegramChatId);
+            initWhatsApp(telegramChatId);
+        }
+    } catch (e) {
+        console.error("Failed to auto-restore connection:", e.message);
+    }
+}
+
+// HTTP API endpoints
+app.get('/status', (req, res) => {
+    res.json({
+        state: connectionState,
+        qr: qrCode ? true : false
+    });
+});
+
+app.post('/init', async (req, res) => {
+    const { chat_id } = req.body;
+    try {
+        await initWhatsApp(chat_id);
+        res.json({ success: true, state: connectionState });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/pair', async (req, res) => {
+    const { phone, chat_id } = req.body;
+    try {
+        const cleanPhone = phone.replace(/[^0-9]/g, '');
+        const code = await initWhatsApp(chat_id, cleanPhone);
+        res.json({ success: true, code: code });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/send', async (req, res) => {
+    const { to, message } = req.body;
+    if (!sock || connectionState !== 'CONNECTED') {
+        return res.status(400).json({ error: 'WhatsApp not connected' });
+    }
+    try {
+        await sock.sendMessage(to, { text: message });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.listen(PORT, () => {
+    console.log(`WhatsApp-Telegram bridge running on port ${PORT}`);
+});

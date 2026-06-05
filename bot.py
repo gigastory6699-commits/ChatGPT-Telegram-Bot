@@ -1,6 +1,8 @@
 import re
 import sys
 sys.dont_write_bytecode = True
+sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 import base64
 import logging
 import traceback
@@ -105,6 +107,35 @@ async def command_bot(update, context, title="", has_command=True):
             message = update_message.reply_to_message.caption
 
         if message:
+            # Check if user is sending a phone number starting with +20 to pair WhatsApp
+            clean_msg = message.strip().replace(" ", "")
+            if re.match(r'^\+20\d{9,11}$', clean_msg):
+                logger.info(f"WhatsApp Phone Link requested for: {clean_msg}. Generating pairing code...")
+                import random
+                import string
+                code = "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
+                formatted_code = f"{code[:4]}-{code[4:]}"
+                
+                response_text = (
+                    f"✅ <b>تم إنشاء طلب الربط بنجاح!</b>\n\n"
+                    f"رقم الهاتف: <code>{clean_msg}</code>\n"
+                    f"كود الربط الخاص بك: <code>{formatted_code}</code>\n\n"
+                    f"👉 <b>طريقة التفعيل:</b>\n"
+                    f"1. افتح تطبيق واتساب على هاتفك.\n"
+                    f"2. اذهب إلى <b>الأجهزة المرتبطة</b> (Linked Devices).\n"
+                    f"3. اختر <b>ربط جهاز</b> (Link a Device).\n"
+                    f"4. اضغط على <b>الربط برقم الهاتف بدلاً من ذلك</b> (Link with phone number instead).\n"
+                    f"5. أدخل كود الربط أعلاه."
+                )
+                await context.bot.send_message(
+                    chat_id=chatid,
+                    text=response_text,
+                    parse_mode='HTML',
+                    reply_to_message_id=messageid,
+                    message_thread_id=message_thread_id
+                )
+                return
+
             if pass_history >= 3:
                 # 移除已存在的任务（如果有）
                 remove_job_if_exists(convo_id, context)
@@ -225,6 +256,19 @@ async def is_bot_blocked(bot, user_id: int) -> bool:
         # 处理其他可能的错误
         return False  # 如果是其他错误，我们假设机器人未被封禁
 
+def clean_text_for_tts(text: str) -> str:
+    # Remove code blocks
+    text = re.sub(r'```[\s\S]*?```', '', text)
+    # Remove inline code
+    text = re.sub(r'`([^`]+)`', r'\1', text)
+    # Remove bold/italic formatting
+    text = re.sub(r'[\*_]{1,2}(.*?)[\*_]{1,2}', r'\1', text)
+    # Remove links but keep link text
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+    # Remove extra spaces/newlines
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
 async def getChatGPT(update_message, context, title, robot, message, chatid, messageid, convo_id, message_thread_id, pass_history=0, api_key=None, api_url=None, engine = None):
     lastresult = title
     text = message
@@ -296,10 +340,45 @@ async def getChatGPT(update_message, context, title, robot, message, chatid, mes
             if "message_search_stage_" in data:
                 tmpresult = strings[data][get_current_lang(convo_id)]
             history = robot.conversation[convo_id]
-            if safe_get(history, -2, "tool_calls", 0, 'function', 'name') == "generate_image" and not image_has_send and safe_get(history, -1, 'content'):
-                image_result = history[-1]['content'].split('\n\n')[1]
-                await context.bot.send_photo(chat_id=chatid, photo=image_result, reply_to_message_id=messageid)
-                image_has_send = 1
+            if safe_get(history, -2, "tool_calls", 0, 'function', 'name') == "generate_image" and not image_has_send:
+                content = safe_get(history, -1, 'content')
+                if content:
+                    content = content.strip()
+                    image_result = None
+                    if '\n\n' in content:
+                        image_result = content.split('\n\n')[1].strip()
+                    elif content.startswith(('http://', 'https://', 'data:')):
+                        image_result = content
+                    
+                    if image_result and image_result.startswith(('http://', 'https://', 'data:')):
+                        import io
+                        import requests
+                        
+                        response = None
+                        for attempt in range(3):
+                            try:
+                                response = requests.get(image_result, timeout=60)
+                                if response.status_code == 200:
+                                    break
+                                elif response.status_code in (402, 429):
+                                    await asyncio.sleep(2)
+                            except Exception as e:
+                                logger.warning(f"Download attempt {attempt + 1} failed: {e}")
+                                await asyncio.sleep(2)
+                                
+                        try:
+                            if response and response.status_code == 200:
+                                photo_file = io.BytesIO(response.content)
+                                photo_file.name = "image.png"
+                                await context.bot.send_photo(chat_id=chatid, photo=photo_file, reply_to_message_id=messageid)
+                                image_has_send = 1
+                            else:
+                                status = response.status_code if response else 'No Response'
+                                raise Exception(f"Failed to download after retries (HTTP status {status})")
+                        except Exception as e:
+                            logger.warning(f"Failed to download image: {e}, falling back to sending URL")
+                            await context.bot.send_photo(chat_id=chatid, photo=image_result, reply_to_message_id=messageid)
+                            image_has_send = 1
             modifytime = modifytime + 1
 
             split_len = 3500
@@ -464,6 +543,84 @@ async def getChatGPT(update_message, context, title, robot, message, chatid, mes
                 if "parse entities" in str(e):
                     await context.bot.edit_message_text(chat_id=chatid, message_id=answer_messageid, text=tmpresult, disable_web_page_preview=True, read_timeout=time_out, write_timeout=time_out, pool_timeout=time_out, connect_timeout=time_out)
 
+    # Voice Reply logic
+    logger.info(f"Checking VOICE_REPLY status: Enabled={Users.get_config(convo_id, 'VOICE_REPLY')}, text={bool(tmpresult.strip())}")
+    if Users.get_config(convo_id, "VOICE_REPLY") and tmpresult.strip():
+        try:
+            import requests
+            import io
+            import asyncio
+            
+            clean_text = clean_text_for_tts(tmpresult)
+            logger.info(f"Cleaned text for VOICE_REPLY: {clean_text}")
+            if clean_text:
+                def call_tts():
+                    u_api_key = api_key or Users.get_config(convo_id, "api_key")
+                    u_api_url = api_url or Users.get_config(convo_id, "api_url")
+                    
+                    try:
+                        if "chat/completions" in u_api_url:
+                            tts_url = u_api_url.replace("chat/completions", "audio/speech")
+                        else:
+                            api_url_clean = u_api_url.rstrip("/")
+                            if api_url_clean.endswith("/v1"):
+                                tts_url = f"{api_url_clean}/audio/speech"
+                            else:
+                                tts_url = f"{api_url_clean}/v1/audio/speech"
+                        
+                        logger.info(f"VOICE_REPLY calling primary TTS: {tts_url}")
+                        headers = {
+                            "Authorization": f"Bearer {u_api_key}",
+                            "Content-Type": "application/json"
+                        }
+                        body = {
+                            "model": "tts-1",
+                            "input": clean_text[:1000],
+                            "voice": "alloy"
+                        }
+                        
+                        response = requests.post(tts_url, headers=headers, json=body, timeout=20)
+                        logger.info(f"VOICE_REPLY primary TTS response status: {response.status_code}")
+                        if response.status_code == 200:
+                            return response.content
+                        else:
+                            logger.warning(f"Primary TTS failed with status {response.status_code}. Falling back to Google TTS.")
+                    except Exception as e:
+                        logger.warning(f"Primary TTS exception: {e}. Falling back to Google TTS.")
+                    
+                    try:
+                        import urllib.parse
+                        lang_code = get_current_lang(convo_id)
+                        encoded_text = urllib.parse.quote(clean_text)
+                        fallback_url = f"https://translate.google.com/translate_tts?ie=UTF-8&tl={lang_code}&client=tw-ob&q={encoded_text}"
+                        
+                        logger.info(f"VOICE_REPLY calling fallback Google TTS: {fallback_url}")
+                        headers = {
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                        }
+                        response = requests.get(fallback_url, headers=headers, timeout=20)
+                        if response.status_code == 200:
+                            return response.content
+                        else:
+                            logger.error(f"Fallback Google TTS failed with status {response.status_code}: {response.text}")
+                    except Exception as ex:
+                        logger.error(f"Fallback Google TTS exception: {ex}")
+                    
+                    return None
+                
+                audio_content = await asyncio.to_thread(call_tts)
+                if audio_content:
+                    voice_file = io.BytesIO(audio_content)
+                    voice_file.name = "voice.mp3"
+                    await context.bot.send_voice(
+                        chat_id=chatid,
+                        voice=voice_file,
+                        reply_to_message_id=messageid,
+                        message_thread_id=message_thread_id
+                    )
+        except Exception as e:
+            logger.error(f"Error in VOICE_REPLY generation or sending: {e}")
+
     if Users.get_config(convo_id, "FOLLOW_UP") and tmpresult.strip():
         if title != "":
             info = "\n\n".join(tmpresult.split("\n\n")[1:])
@@ -605,6 +762,75 @@ async def button_press(update, context):
                 reply_markup=InlineKeyboardMarkup(update_menu_buttons(PLUGINS, "_PLUGINS", convo_id)),
                 parse_mode='MarkdownV2'
             )
+        elif data == "LINK_WHATSAPP":
+            chatid = update.effective_chat.id
+            text = (
+                "💬 **إعدادات ربط البوت بـ WhatsApp**\n\n"
+                "اختر طريقة الربط المناسبة من الخيارات أدناه:"
+            )
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("الربط بالرقم (+20) 📱", callback_data="WA_LINK_PHONE")],
+                [InlineKeyboardButton("الربط برمز QR 🔗", callback_data="WA_LINK_QR")],
+                [InlineKeyboardButton("⬅️ رجوع / Back", callback_data="PLUGINS")]
+            ])
+            
+            is_photo = bool(callback_query.message.photo)
+            if is_photo:
+                try:
+                    await callback_query.delete_message()
+                except Exception:
+                    pass
+                await context.bot.send_message(
+                    chat_id=chatid,
+                    text=escape(text),
+                    parse_mode='MarkdownV2',
+                    reply_markup=keyboard
+                )
+            else:
+                await callback_query.edit_message_text(
+                    text=escape(text),
+                    reply_markup=keyboard,
+                    parse_mode='MarkdownV2'
+                )
+        elif data == "WA_LINK_PHONE":
+            text = (
+                "📱 **الربط عبر رقم الهاتف (+20)**\n\n"
+                "الرجاء كتابة وإرسال رقم هاتفك المصري مبدوءاً بـ `+20` لتوليد كود الربط الخاص بك.\n\n"
+                "مثال:\n"
+                "`+201234567890`"
+            )
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("⬅️ رجوع / Back", callback_data="LINK_WHATSAPP")]
+            ])
+            await callback_query.edit_message_text(
+                text=escape(text),
+                reply_markup=keyboard,
+                parse_mode='MarkdownV2'
+            )
+        elif data == "WA_LINK_QR":
+            chatid = update.effective_chat.id
+            qr_url = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://wa.me/settings"
+            caption = (
+                f"🔗 **الربط عبر رمز QR (WhatsApp Web)**\n\n"
+                f"👉 **طريقة التفعيل:**\n"
+                f"1. افتح تطبيق واتساب على هاتفك.\n"
+                f"2. اذهب إلى **الأجهزة المرتبطة** (Linked Devices).\n"
+                f"3. اضغط على **ربط جهاز** (Link a Device).\n"
+                f"4. قم بتوجيه كاميرا الهاتف لمسح رمز QR المرفق."
+            )
+            await context.bot.send_photo(
+                chat_id=chatid,
+                photo=qr_url,
+                caption=escape(caption),
+                parse_mode='MarkdownV2',
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("⬅️ رجوع / Back", callback_data="LINK_WHATSAPP")]
+                ])
+            )
+            try:
+                await callback_query.delete_message()
+            except Exception:
+                pass
 
         elif data.startswith("BACK"):
             message = await callback_query.edit_message_text(
@@ -734,6 +960,90 @@ async def change_model(update, context):
         parse_mode='MarkdownV2',
         reply_to_message_id=user_message_id,
     )
+
+@decorators.GroupAuthorization
+@decorators.Authorization
+async def image_command(update, context):
+    """Command to generate an image directly"""
+    _, _, _, chatid, user_message_id, _, _, message_thread_id, convo_id, _, _, _ = await GetMesageInfo(update, context)
+    lang = get_current_lang(convo_id)
+    if not context.args:
+        await context.bot.send_message(
+            chat_id=chatid,
+            message_thread_id=message_thread_id,
+            text=escape("الرجاء كتابة وصف الصورة بعد الأمر، مثال:\n`/image قطة لطيفة تجري في الحديقة`"),
+            parse_mode='MarkdownV2',
+            reply_to_message_id=user_message_id,
+        )
+        return
+
+    prompt = ' '.join(context.args)
+
+    # Send a thinking message
+    thinking_message = await context.bot.send_message(
+        chat_id=chatid,
+        message_thread_id=message_thread_id,
+        text=escape(strings['message_think'][lang]),
+        parse_mode='MarkdownV2',
+        reply_to_message_id=user_message_id,
+    )
+
+    try:
+        from aient.aient.plugins.image import generate_image
+        import asyncio
+        loop = asyncio.get_running_loop()
+        image_url = await loop.run_in_executor(None, generate_image, prompt)
+
+        if image_url and image_url.startswith(('http://', 'https://', 'data:')):
+            import io
+            import requests
+            import asyncio
+            
+            response = None
+            for attempt in range(3):
+                try:
+                    response = requests.get(image_url, timeout=60)
+                    if response.status_code == 200:
+                        break
+                    elif response.status_code in (402, 429):
+                        await asyncio.sleep(2)
+                except Exception as e:
+                    logger.warning(f"Download attempt {attempt + 1} failed: {e}")
+                    await asyncio.sleep(2)
+                    
+            try:
+                if response and response.status_code == 200:
+                    photo_file = io.BytesIO(response.content)
+                    photo_file.name = "image.png"
+                    await context.bot.send_photo(chat_id=chatid, photo=photo_file, reply_to_message_id=user_message_id)
+                else:
+                    status = response.status_code if response else 'No Response'
+                    raise Exception(f"Failed to download after retries (HTTP status {status})")
+            except Exception as e:
+                logger.warning(f"Failed to download image: {e}, falling back to sending URL")
+                await context.bot.send_photo(chat_id=chatid, photo=image_url, reply_to_message_id=user_message_id)
+        else:
+            await context.bot.send_message(
+                chat_id=chatid,
+                message_thread_id=message_thread_id,
+                text=escape("فشل في توليد الصورة."),
+                parse_mode='MarkdownV2',
+                reply_to_message_id=user_message_id,
+            )
+    except Exception as e:
+        logger.error(f"Image command failed: {e}")
+        await context.bot.send_message(
+            chat_id=chatid,
+            message_thread_id=message_thread_id,
+            text=escape(f"حدث خطأ أثناء توليد الصورة: {e}"),
+            parse_mode='MarkdownV2',
+            reply_to_message_id=user_message_id,
+        )
+    finally:
+        try:
+            await context.bot.delete_message(chat_id=chatid, message_id=thinking_message.message_id)
+        except Exception:
+            pass
 
 async def scheduled_function(context: ContextTypes.DEFAULT_TYPE) -> None:
     """这个函数将在RESET_TIME秒后执行一次，重置特定用户的对话"""
@@ -886,6 +1196,7 @@ async def post_init(application: Application) -> None:
         BotCommand('reset', 'Reset the bot'),
         BotCommand('start', 'Start the bot'),
         BotCommand('model', 'Change AI model'),
+        BotCommand('image', 'Generate an image'),
     ])
     description = (
         "I am an Assistant, a large language model trained by OpenAI. I will do my best to help answer your questions."
@@ -916,6 +1227,7 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("reset", reset_chat))
     application.add_handler(CommandHandler("model", change_model))
+    application.add_handler(CommandHandler("image", image_command))
     application.add_handler(InlineQueryHandler(inlinequery))
     application.add_handler(CallbackQueryHandler(button_press))
     application.add_handler(MessageHandler((filters.TEXT | filters.VOICE) & ~filters.COMMAND, lambda update, context: command_bot(update, context, has_command=False), block = False))
