@@ -19,8 +19,6 @@ __pycache__/
 test/
 tests/
 
-# Submodule installed via pip from GitHub instead
-aient/
 
 # Documentation
 README.md
