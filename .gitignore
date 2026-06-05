@@ -4,3 +4,5 @@ __pycache__/
 .env
 user_configs
 pyrightconfig.json
+node_modules/
+whatsapp_bridge/node_modules/

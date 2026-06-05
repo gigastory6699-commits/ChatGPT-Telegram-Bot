@@ -576,7 +576,7 @@ async def getChatGPT(update_message, context, title, robot, message, chatid, mes
                         body = {
                             "model": "tts-1",
                             "input": clean_text[:1000],
-                            "voice": "alloy"
+                            "voice": os.environ.get('TTS_VOICE', 'alloy')
                         }
                         
                         response = requests.post(tts_url, headers=headers, json=body, timeout=20)
