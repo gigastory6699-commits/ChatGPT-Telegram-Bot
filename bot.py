@@ -544,8 +544,10 @@ async def getChatGPT(update_message, context, title, robot, message, chatid, mes
                     await context.bot.edit_message_text(chat_id=chatid, message_id=answer_messageid, text=tmpresult, disable_web_page_preview=True, read_timeout=time_out, write_timeout=time_out, pool_timeout=time_out, connect_timeout=time_out)
 
     # Voice Reply logic
-    logger.info(f"Checking VOICE_REPLY status: Enabled={Users.get_config(convo_id, 'VOICE_REPLY')}, text={bool(tmpresult.strip())}")
-    if Users.get_config(convo_id, "VOICE_REPLY") and tmpresult.strip():
+    is_voice_input = bool(update_message.voice) if update_message and hasattr(update_message, 'voice') and update_message.voice else False
+    is_voice_reply_enabled = Users.get_config(convo_id, "VOICE_REPLY") or is_voice_input
+    logger.info(f"Checking VOICE_REPLY status: Enabled={is_voice_reply_enabled}, text={bool(tmpresult.strip())}")
+    if is_voice_reply_enabled and tmpresult.strip():
         try:
             import requests
             import io

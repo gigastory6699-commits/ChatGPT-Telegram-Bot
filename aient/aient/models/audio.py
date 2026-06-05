@@ -26,7 +26,7 @@ class whisper(BaseLLM):
         headers = {"Authorization": f"Bearer {kwargs.get('api_key', self.api_key)}"}
 
         files = {
-            "file": ("audio.mp3", audio_file, "audio/mpeg")
+            "file": ("audio.oga", audio_file, "audio/ogg")
         }
 
         data = {
