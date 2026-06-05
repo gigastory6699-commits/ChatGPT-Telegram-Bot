@@ -18,8 +18,9 @@ __pycache__/
 # Test files
 test/
 tests/
-aient/test/
-md2tgmd/test/
+
+# Submodule installed via pip from GitHub instead
+aient/
 
 # Documentation
 README.md
