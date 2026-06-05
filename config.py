@@ -478,6 +478,7 @@ def create_buttons(strings, plugins_status=False, lang="English", button_text=No
     return buttons
 
 initial_model = [
+    "gpt-5.5",
     "gpt-5",
     "o3",
     "claude-sonnet-4-20250514",
