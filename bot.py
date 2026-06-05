@@ -831,6 +831,43 @@ async def button_press(update, context):
                 await callback_query.delete_message()
             except Exception:
                 pass
+        elif data == "USE_OWN_KEY":
+            text = (
+                "🔑 **استخدام مفتاح خاص بك / Use Your Own Key**\n\n"
+                "يمكنك استخدام مفتاح API ورابط مخصصين لتشغيل البوت لحسابك فقط.\n\n"
+                "👉 **طريقة التعيين:**\n"
+                "أرسل رسالة جديدة بالصيغة التالية (اضغط لنسخ المثال وتعديله):\n"
+                "• **لتعيين مفتاح ورابط مخصص:**\n"
+                "`/start <api_url> <api_key>`\n"
+                "مثال:\n"
+                "`/start https://api.vectorengine.ai sk-xxxx...`\n\n"
+                "• **لتعيين مفتاح OpenAI فقط (الرابط الافتراضي):**\n"
+                "`/start <api_key>`\n"
+                "مثال:\n"
+                "`/start sk-xxxx...`\n\n"
+                "🔄 **إعادة تعيين الافتراضي:**\n"
+                "إذا أردت إلغاء المفتاح الخاص والرجوع لمفتاح البوت الافتراضي، اضغط على الزر أدناه."
+            )
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("إعادة تعيين الافتراضي / Reset Default 🔄", callback_data="RESET_DEFAULT_KEY")],
+                [InlineKeyboardButton("⬅️ رجوع / Back", callback_data="PLUGINS")]
+            ])
+            await callback_query.edit_message_text(
+                text=escape(text, italic=False),
+                reply_markup=keyboard,
+                parse_mode='MarkdownV2'
+            )
+        elif data == "RESET_DEFAULT_KEY":
+            Users.set_config(convo_id, "api_key", config.API_KEY)
+            Users.set_config(convo_id, "api_url", config.BASE_URL)
+            config.InitEngine(convo_id)
+            await callback_query.answer("تمت إعادة تعيين المفتاح الافتراضي بنجاح! / Reset to default key successfully!", show_alert=True)
+            info_message = update_info_message(convo_id)
+            await callback_query.edit_message_text(
+                text=escape(info_message, italic=False),
+                reply_markup=InlineKeyboardMarkup(update_menu_buttons(PLUGINS, "_PLUGINS", convo_id)),
+                parse_mode='MarkdownV2'
+            )
 
         elif data.startswith("BACK"):
             message = await callback_query.edit_message_text(

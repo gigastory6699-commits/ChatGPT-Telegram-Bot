@@ -726,6 +726,9 @@ def update_menu_buttons(setting, _strings, chatid):
         buttons.insert(0, [
             InlineKeyboardButton("ربط واتساب / Link WhatsApp 💬", callback_data="LINK_WHATSAPP"),
         ])
+        buttons.insert(1, [
+            InlineKeyboardButton("مفتاح خاص بك / Custom API Key 🔑", callback_data="USE_OWN_KEY"),
+        ])
     buttons.append(
         [
             InlineKeyboardButton(strings['button_back'][lang], callback_data="BACK"),
