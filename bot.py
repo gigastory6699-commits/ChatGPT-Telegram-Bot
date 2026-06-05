@@ -560,6 +560,44 @@ async def getChatGPT(update_message, context, title, robot, message, chatid, mes
                     u_api_key = api_key or Users.get_config(convo_id, "api_key")
                     u_api_url = api_url or Users.get_config(convo_id, "api_url")
                     
+                    openai_voices = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']
+                    voice_name = os.environ.get('TTS_VOICE', 'onyx')
+                    if voice_name.lower() not in openai_voices:
+                        try:
+                            import edge_tts
+                            import tempfile
+                            
+                            edge_voice = voice_name
+                            if voice_name.lower() in ['shakir', 'egyptian-male', 'egypt-male']:
+                                edge_voice = "ar-EG-ShakirNeural"
+                            elif voice_name.lower() in ['salma', 'egyptian-female', 'egypt-female']:
+                                edge_voice = "ar-EG-SalmaNeural"
+                                
+                            logger.info(f"VOICE_REPLY calling Edge TTS with voice: {edge_voice}")
+                            temp_dir = tempfile.gettempdir()
+                            temp_file_path = os.path.join(temp_dir, f"voice_{convo_id}.mp3")
+                            
+                            try:
+                                loop = asyncio.get_event_loop()
+                            except RuntimeError:
+                                loop = asyncio.new_event_loop()
+                                asyncio.set_event_loop(loop)
+                                
+                            communicate = edge_tts.Communicate(clean_text[:1000], edge_voice)
+                            loop.run_until_complete(communicate.save(temp_file_path))
+                            
+                            with open(temp_file_path, "rb") as f:
+                                content = f.read()
+                                
+                            try:
+                                os.remove(temp_file_path)
+                            except Exception:
+                                pass
+                                
+                            return content
+                        except Exception as e:
+                            logger.warning(f"Edge TTS failed: {e}. Falling back to standard TTS.")
+                    
                     try:
                         if "chat/completions" in u_api_url:
                             tts_url = u_api_url.replace("chat/completions", "audio/speech")
