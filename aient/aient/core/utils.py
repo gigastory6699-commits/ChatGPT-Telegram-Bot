@@ -37,6 +37,17 @@ class BaseAPI:
     ):
         if api_url == "":
             api_url = "https://api.openai.com/v1/chat/completions"
+        if "rapidapi" in api_url:
+            self.source_api_url = api_url
+            self.base_url = api_url
+            self.v1_url = api_url
+            self.chat_url = api_url
+            self.v1_models = api_url
+            self.audio_transcriptions = api_url
+            self.moderations = api_url
+            self.embeddings = api_url
+            self.audio_speech = api_url
+            return
         if "api.vectorengine.ai" in api_url and "/v1" not in api_url:
             if api_url.endswith("/"):
                 api_url = api_url + "v1/chat/completions"
@@ -90,6 +101,10 @@ def get_engine(provider, endpoint=None, original_model=""):
     # print("parsed_url", parsed_url)
     engine = None
     stream = None
+    if "rapidapi" in provider.get('base_url', '') or "rapidapi" in parsed_url.netloc:
+        engine = "rapidapi"
+        stream = False
+        return engine, stream
     # Volcengine Ark translation (Responses API)
     if parsed_url.netloc.endswith("volces.com") and parsed_url.path.rstrip("/").endswith("/api/v3/responses"):
         engine = "doubao-translation"
@@ -189,6 +204,8 @@ async def update_initial_model(provider):
         api = provider['api']
         proxy = safe_get(provider, "preferences", "proxy", default=None)
         client_config = get_proxy(proxy)
+        if engine == "rapidapi":
+            return ["chatgpt"]
         if engine == "gemini":
             before_v1 = api_url.split("/v1beta")[0]
             url = before_v1 + "/v1beta/models"

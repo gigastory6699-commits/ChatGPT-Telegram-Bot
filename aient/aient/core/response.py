@@ -614,6 +614,19 @@ async def fetch_aws_response_stream(client, url, headers, payload, model, timeou
 
 async def fetch_response(client, url, headers, payload, engine, model, timeout=200):
     response = None
+    if engine == "rapidapi":
+        response = await client.get(url, headers=headers, params=payload, timeout=timeout)
+        error_message = await check_response(response, "fetch_response")
+        if error_message:
+            yield error_message
+            return
+        response_bytes = await response.aread()
+        response_json = await asyncio.to_thread(json.loads, response_bytes)
+        content = response_json.get("response", "")
+        timestamp = int(datetime.timestamp(datetime.now()))
+        yield await generate_no_stream_response(timestamp, model, content=content, role="assistant")
+        return
+
     if payload.get("file"):
         file = payload.pop("file")
         response = await client.post(url, headers=headers, data=payload, files={"file": file}, timeout=timeout)
@@ -902,6 +915,20 @@ async def fetch_doubao_translation_response_stream(client, url, headers, payload
         yield "data: [DONE]" + end_of_line
 
 async def fetch_response_stream(client, url, headers, payload, engine, model, timeout=200):
+    if engine == "rapidapi":
+        response = await client.get(url, headers=headers, params=payload, timeout=timeout)
+        error_message = await check_response(response, "fetch_response_stream")
+        if error_message:
+            yield error_message
+            return
+        response_bytes = await response.aread()
+        response_json = await asyncio.to_thread(json.loads, response_bytes)
+        content = response_json.get("response", "")
+        timestamp = int(datetime.timestamp(datetime.now()))
+        yield await generate_sse_response(timestamp, model, content=content)
+        yield "data: [DONE]" + end_of_line
+        return
+
     if engine == "gemini" or engine == "vertex-gemini":
         async for chunk in fetch_gemini_response_stream(client, url, headers, payload, model, timeout):
             yield chunk

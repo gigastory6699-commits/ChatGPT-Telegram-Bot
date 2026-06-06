@@ -2449,8 +2449,42 @@ async def get_doubao_translation_payload(request: RequestModel, engine, provider
 
     return url, headers, payload
 
+async def get_rapidapi_payload(request, engine, provider, api_key=None):
+    headers = {
+        'x-rapidapi-key': f"{api_key}",
+        'x-rapidapi-host': 'free-chatgpt-api.p.rapidapi.com',
+        'Content-Type': 'application/json',
+    }
+    url = provider['base_url']
+    
+    # Extract prompt
+    user_text = ""
+    if getattr(request, "prompt", None):
+        user_text = request.prompt
+    else:
+        for msg in reversed(request.messages or []):
+            if getattr(msg, "role", None) != "user":
+                continue
+            if isinstance(msg.content, list):
+                text_parts = []
+                for item in msg.content:
+                    if getattr(item, "type", None) == "text":
+                        text_parts.append(getattr(item, "text", ""))
+                user_text = "\n".join(text_parts)
+            elif isinstance(msg.content, str):
+                user_text = msg.content
+            if user_text:
+                break
+                
+    payload = {
+        "prompt": user_text
+    }
+    return url, headers, payload
+
 async def get_payload(request: RequestModel, engine, provider, api_key=None):
-    if engine == "gemini":
+    if engine == "rapidapi":
+        return await get_rapidapi_payload(request, engine, provider, api_key)
+    elif engine == "gemini":
         return await get_gemini_payload(request, engine, provider, api_key)
     elif engine == "vertex-gemini":
         return await get_vertex_gemini_payload(request, engine, provider, api_key)
