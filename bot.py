@@ -1245,13 +1245,15 @@ async def button_press(update, context):
                 parse_mode='MarkdownV2'
             )
     except telegram.error.BadRequest as e:
-        print('\033[31m')
-        traceback.print_exc()
-        if "Message to edit not found" in str(e):
+        if "Message is not modified" in str(e):
+            pass
+        elif "Message to edit not found" in str(e):
             print("error: telegram.error.BadRequest: Message to edit not found!")
         else:
+            print('\033[31m')
+            traceback.print_exc()
             print(f"error: {str(e)}")
-        print('\033[0m')
+            print('\033[0m')
 
 @decorators.GroupAuthorization
 @decorators.Authorization
