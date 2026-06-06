@@ -872,7 +872,120 @@ async def button_press(update, context):
     banner = strings['message_banner'][get_current_lang(convo_id)]
     import telegram
     try:
-        if data.endswith("_MODELS"):
+        if data.startswith("CLAW_"):
+            if data == "CLAW_CLOSE":
+                try:
+                    await callback_query.delete_message()
+                except Exception:
+                    pass
+                return
+            
+            elif data == "CLAW_OPEN_SETTINGS":
+                text, reply_markup = get_status_keyboard_and_text(convo_id)
+                await callback_query.edit_message_text(
+                    text=escape(text),
+                    reply_markup=reply_markup,
+                    parse_mode='MarkdownV2'
+                )
+                return
+            
+            elif data.startswith("CLAW_TOGGLE_"):
+                key = data[12:]
+                current = Users.get_config(convo_id, key)
+                
+                if key == "activation":
+                    new_val = "always" if current == "mention" else "mention"
+                elif key == "send_policy":
+                    mapping = {"on": "off", "off": "inherit", "inherit": "on"}
+                    new_val = mapping.get(current, "on")
+                elif key == "think_level":
+                    levels = ["off", "minimal", "low", "medium", "high"]
+                    try:
+                        idx = levels.index(current)
+                        new_val = levels[(idx + 1) % len(levels)]
+                    except ValueError:
+                        new_val = "medium"
+                    if new_val == "off":
+                        Users.set_config(convo_id, "reasoning_mode", "off")
+                    else:
+                        Users.set_config(convo_id, "reasoning_mode", "on")
+                elif key == "reasoning_mode":
+                    modes = ["on", "off", "stream"]
+                    try:
+                        idx = modes.index(current)
+                        new_val = modes[(idx + 1) % len(modes)]
+                    except ValueError:
+                        new_val = "on"
+                elif key == "verbose_mode":
+                    new_val = "off" if current == "on" else "on"
+                elif key == "elevated_mode":
+                    new_val = "off" if current == "on" else "on"
+                elif key == "bot_disabled":
+                    new_val = not current
+                
+                Users.set_config(convo_id, key, new_val)
+                
+                key_ar = {
+                    "activation": "سياسة التنشيط",
+                    "send_policy": "سياسة الإرسال",
+                    "think_level": "مستوى التفكير",
+                    "reasoning_mode": "عرض التفكير",
+                    "verbose_mode": "وضع التفصيل",
+                    "elevated_mode": "الوضع المرتفع",
+                    "bot_disabled": "حالة البوت"
+                }.get(key, key)
+                val_ar = {
+                    "always": "دائماً",
+                    "mention": "عند الإشارة",
+                    "on": "تشغيل",
+                    "off": "إيقاف",
+                    "inherit": "وراثة",
+                    "minimal": "أدنى",
+                    "low": "منخفض",
+                    "medium": "متوسط",
+                    "high": "مرتفع",
+                    "stream": "متدفق",
+                    True: "متوقف مؤقتاً",
+                    False: "نشط"
+                }.get(new_val, str(new_val))
+                await callback_query.answer(f"✅ تم تحديث {key_ar} إلى: {val_ar}", show_alert=False)
+                
+            elif data == "CLAW_ACTION_compact":
+                robot, _, _, _ = get_robot(convo_id)
+                success = False
+                if robot and hasattr(robot, 'conversation') and convo_id in robot.conversation:
+                    history = robot.conversation[convo_id]
+                    if len(history) > 5:
+                        system_msg = history[0]
+                        last_msgs = history[-4:]
+                        
+                        from aient.aient.architext.architext import Messages
+                        robot.conversation[convo_id] = Messages(system_msg)
+                        for msg in last_msgs:
+                            robot.conversation[convo_id].append(msg)
+                        success = True
+                
+                if success:
+                    await callback_query.answer("📦 تم ضغط سياق المحادثة بنجاح!", show_alert=True)
+                else:
+                    await callback_query.answer("📦 سياق المحادثة قصير حالياً ولا يحتاج إلى ضغط.", show_alert=True)
+                    
+            elif data == "CLAW_ACTION_restart":
+                reset_ENGINE(convo_id)
+                await callback_query.answer("🔄 تم إعادة تعيين المحادثة ومسح الذاكرة!", show_alert=True)
+            
+            text, reply_markup = get_status_keyboard_and_text(convo_id)
+            try:
+                await callback_query.edit_message_text(
+                    text=escape(text),
+                    reply_markup=reply_markup,
+                    parse_mode='MarkdownV2'
+                )
+            except Exception as e:
+                logger.info(e)
+            return
+            
+        elif data.endswith("_MODELS"):
             data = data[:-7]
             Users.set_config(convo_id, "engine", data)
             try:
@@ -1293,6 +1406,76 @@ async def change_model(update, context):
         reply_to_message_id=user_message_id,
     )
 
+def get_status_keyboard_and_text(convo_id):
+    activation = Users.get_config(convo_id, "activation")
+    send_policy = Users.get_config(convo_id, "send_policy")
+    think_level = Users.get_config(convo_id, "think_level")
+    verbose_mode = Users.get_config(convo_id, "verbose_mode")
+    reasoning_mode = Users.get_config(convo_id, "reasoning_mode")
+    elevated_mode = Users.get_config(convo_id, "elevated_mode")
+    bot_disabled = Users.get_config(convo_id, "bot_disabled")
+    engine = Users.get_config(convo_id, "engine")
+    
+    act_icon = "🔔" if activation == "mention" else "💬"
+    send_icon = "🟢" if send_policy == "on" else ("🔴" if send_policy == "off" else "🟡")
+    think_icon = "🧠" if think_level != "off" else "⛔"
+    reason_icon = "👁️" if reasoning_mode == "on" else ("🙈" if reasoning_mode == "off" else "🌊")
+    verbose_icon = "ℹ️" if verbose_mode == "on" else "🤫"
+    elevated_icon = "⚡" if elevated_mode == "on" else "🔒"
+    disabled_icon = "⏸️" if bot_disabled else "✅"
+    
+    # Translate options to display user-friendly text
+    activation_display = "عند الإشارة (mention)" if activation == "mention" else "دائماً (always)"
+    send_display = "تشغيل (on)" if send_policy == "on" else ("إيقاف (off)" if send_policy == "off" else "وراثة (inherit)")
+    think_display = {
+        "off": "معطل (off)",
+        "minimal": "أدنى (minimal)",
+        "low": "منخفض (low)",
+        "medium": "متوسط (medium)",
+        "high": "مرتفع (high)"
+    }.get(think_level, think_level)
+    reason_display = "إظهار (on)" if reasoning_mode == "on" else ("إخفاء (off)" if reasoning_mode == "off" else "متدفق (stream)")
+    verbose_display = "نشط (on)" if verbose_mode == "on" else "معطل (off)"
+    elevated_display = "نشط (on)" if elevated_mode == "on" else "معطل (off)"
+    
+    status_text = (
+        "⚙️ **لوحة التحكم وإعدادات ClawdBot** ⚙️\n\n"
+        f"🤖 **النموذج النشط:** `{engine}`\n"
+        f"{disabled_icon} **حالة التشغيل:** `{'متوقف مؤقتاً (Paused)' if bot_disabled else 'نشط وجاهز (Active)'}`\n\n"
+        f"🔔 **سياسة التنشيط:** `{activation_display}`\n"
+        f"📬 **سياسة الإرسال:** `{send_display}`\n"
+        f"🧠 **مستوى التفكير:** `{think_display}`\n"
+        f"🔍 **وضع التفصيل (Verbose):** `{verbose_display}`\n"
+        f"💭 **عرض التفكير:** `{reason_display}`\n"
+        f"⚡ **الوضع المرتفع (Elevated):** `{elevated_display}`\n"
+    )
+    
+    keyboard = [
+        [
+            InlineKeyboardButton(f"{act_icon} التنشيط", callback_data="CLAW_TOGGLE_activation"),
+            InlineKeyboardButton(f"{send_icon} الإرسال", callback_data="CLAW_TOGGLE_send_policy")
+        ],
+        [
+            InlineKeyboardButton(f"{think_icon} التفكير", callback_data="CLAW_TOGGLE_think_level"),
+            InlineKeyboardButton(f"{reason_icon} عرض التفكير", callback_data="CLAW_TOGGLE_reasoning_mode")
+        ],
+        [
+            InlineKeyboardButton(f"{verbose_icon} التفصيل (verbose)", callback_data="CLAW_TOGGLE_verbose_mode"),
+            InlineKeyboardButton(f"{elevated_icon} المرتفع (elevated)", callback_data="CLAW_TOGGLE_elevated_mode")
+        ],
+        [
+            InlineKeyboardButton(f"{'▶️ تشغيل البوت' if bot_disabled else '⏸️ إيقاف البوت مؤقتاً'}", callback_data="CLAW_TOGGLE_bot_disabled")
+        ],
+        [
+            InlineKeyboardButton("📦 ضغط الذاكرة (Compact)", callback_data="CLAW_ACTION_compact"),
+            InlineKeyboardButton("🔄 مسح الجلسة (Restart)", callback_data="CLAW_ACTION_restart")
+        ],
+        [
+            InlineKeyboardButton("❌ إغلاق لوحة الإعدادات", callback_data="CLAW_CLOSE")
+        ]
+    ]
+    return status_text, InlineKeyboardMarkup(keyboard)
+
 @decorators.GroupAuthorization
 @decorators.Authorization
 async def help_command(update, context):
@@ -1302,7 +1485,7 @@ async def help_command(update, context):
     help_text = (
         "🤖 **دليل أوامر وميزات ClawdBot المميزة** 🤖\n\n"
         "⚙️ **التحكم والتشغيل:**\n"
-        "• `/status` - عرض الإعدادات النشطة للشات.\n"
+        "• `/status` - عرض لوحة الإعدادات التفاعلية.\n"
         "• `/stop` - إيقاف البوت مؤقتاً في هذا الشات.\n"
         "• `/start` - تشغيل وتفعيل البوت مجدداً.\n"
         "• `/restart` - إعادة تشغيل الشات وبدء جلسة جديدة (مرادف لـ `/reset`).\n\n"
@@ -1321,10 +1504,15 @@ async def help_command(update, context):
         "• `/compact` - ضغط ذاكرة المحادثة لتوفير التوكنز وتسريع الردود."
     )
     
+    help_keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("⚙️ فتح لوحة الإعدادات التفاعلية", callback_data="CLAW_OPEN_SETTINGS")]
+    ])
+    
     await context.bot.send_message(
         chat_id=chatid,
         message_thread_id=message_thread_id,
         text=escape(help_text),
+        reply_markup=help_keyboard,
         parse_mode='MarkdownV2',
         reply_to_message_id=user_message_id
     )
@@ -1335,31 +1523,12 @@ async def status_command(update, context):
     """Command to show the current ClawdBot settings and status"""
     _, _, _, chatid, user_message_id, _, _, message_thread_id, convo_id, _, _, _ = await GetMesageInfo(update, context)
     
-    activation = Users.get_config(convo_id, "activation")
-    send_policy = Users.get_config(convo_id, "send_policy")
-    think_level = Users.get_config(convo_id, "think_level")
-    verbose_mode = Users.get_config(convo_id, "verbose_mode")
-    reasoning_mode = Users.get_config(convo_id, "reasoning_mode")
-    elevated_mode = Users.get_config(convo_id, "elevated_mode")
-    bot_disabled = Users.get_config(convo_id, "bot_disabled")
-    engine = Users.get_config(convo_id, "engine")
-    
-    status_text = (
-        "⚙️ **حالة إعدادات البوت الحالية (ClawdBot Status)** ⚙️\n\n"
-        f"🤖 **النموذج النشط:** `{engine}`\n"
-        f"⏸️ **حالة التشغيل:** `{'متوقف مؤقتاً (Paused)' if bot_disabled else 'نشط وجاهز (Active)'}`\n\n"
-        f"🔔 **سياسة التنشيط (/activation):** `{activation}`\n"
-        f"📬 **سياسة الإرسال (/send):** `{send_policy}`\n"
-        f"🧠 **مستوى التفكير (/think):** `{think_level}`\n"
-        f"🔍 **وضع التفصيل (/verbose):** `{verbose_mode}`\n"
-        f"💭 **وضع عرض التفكير (/reasoning):** `{reasoning_mode}`\n"
-        f"⚡ **الوضع المرتفع (/elevated):** `{elevated_mode}`\n"
-    )
-    
+    text, reply_markup = get_status_keyboard_and_text(convo_id)
     await context.bot.send_message(
         chat_id=chatid,
         message_thread_id=message_thread_id,
-        text=escape(status_text),
+        text=escape(text),
+        reply_markup=reply_markup,
         parse_mode='MarkdownV2',
         reply_to_message_id=user_message_id
     )
