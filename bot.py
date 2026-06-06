@@ -1217,20 +1217,20 @@ async def start(update, context): # 当用户输入/start时，返回文本
     message = (
         f"Hi `{user.username}` ! I am an Assistant, a large language model trained by OpenAI. I will do my best to help answer your questions.\n\n"
     )
-    if len(context.args) == 2 and context.args[1].startswith("sk-"):
+    if len(context.args) == 2:
         api_url = context.args[0]
         api_key = context.args[1]
-        Users.set_config(convo_id, "api_key", api_key)
-        Users.set_config(convo_id, "api_url", api_url)
-        # if GET_MODELS:
-        #     update_initial_model()
+        if api_url.startswith("http://") or api_url.startswith("https://"):
+            Users.set_config(convo_id, "api_key", api_key)
+            Users.set_config(convo_id, "api_url", api_url)
+            config.InitEngine(convo_id)
 
-    if len(context.args) == 1 and context.args[0].startswith("sk-"):
+    elif len(context.args) == 1:
         api_key = context.args[0]
-        Users.set_config(convo_id, "api_key", api_key)
-        Users.set_config(convo_id, "api_url", "https://api.openai.com/v1/chat/completions")
-        # if GET_MODELS:
-        #     update_initial_model()
+        if not (api_key.startswith("http://") or api_key.startswith("https://")):
+            Users.set_config(convo_id, "api_key", api_key)
+            Users.set_config(convo_id, "api_url", "https://api.openai.com/v1/chat/completions")
+            config.InitEngine(convo_id)
 
     # message = (
     #     ">Block quotation started\n"
