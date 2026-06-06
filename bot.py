@@ -81,6 +81,100 @@ from collections import defaultdict
 message_cache = defaultdict(lambda: [])
 time_stamps = defaultdict(lambda: [])
 
+PERSONAS = {
+    "general": {
+        "name": "مساعد عام 🤖",
+        "prompt": "Respond conversationally in {language}. Current date: [ {date} ]"
+    },
+    "coder": {
+        "name": "خبير برمجة 💻",
+        "prompt": "You are an expert software engineer and coder. Answer all questions with precise, optimized, and clear code. Explain concepts concisely. Respond in {language}. Current date: [ {date} ]"
+    },
+    "english": {
+        "name": "معلم إنجليزي 🇬🇧",
+        "prompt": "You are a friendly and encouraging English Tutor. Help the user learn and practice English. Correct their mistakes politely, explain grammar simply, and prompt them to practice speaking or writing. Respond in {language} but keep tutoring parts in English. Current date: [ {date} ]"
+    },
+    "writer": {
+        "name": "كاتب إبداعي ✍️",
+        "prompt": "You are a creative writer and storyteller. Help the user brainstorm ideas, write stories, poems, or scripts. Use beautiful, expressive language. Respond in {language}. Current date: [ {date} ]"
+    }
+}
+
+def is_deepseek_model(engine):
+    if not engine:
+        return False
+    eng_lower = engine.lower()
+    return "deepseek" in eng_lower or eng_lower == "dsk"
+
+async def describe_image_via_groq(image_url: str) -> str:
+    import os
+    import base64
+    import httpx
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+    groq_url = os.environ.get("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+    if not groq_url:
+        groq_url = "https://api.groq.com/openai/v1"
+    
+    if not groq_key:
+        logger.warning("GROQ_API_KEY is not set. Cannot perform hybrid image vision.")
+        return "⚠️ (خطأ: لم يتم تهيئة GROQ_API_KEY في ملف البيئة .env لتحليل الصور)"
+        
+    base64_image = None
+    try:
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.get(image_url, timeout=30)
+            if response.status_code == 200:
+                content_type = response.headers.get("Content-Type", "image/jpeg")
+                encoded_string = base64.b64encode(response.content).decode('utf-8')
+                base64_image = f"data:{content_type};base64,{encoded_string}"
+    except Exception as e:
+        logger.error(f"Failed to download image for Groq Vision: {e}")
+        return f"⚠️ (خطأ أثناء تحميل الصورة: {str(e)})"
+
+    if not base64_image:
+        return "⚠️ (خطأ: فشل تحميل الصورة أو ترميزها)"
+
+    headers = {
+        "Authorization": f"Bearer {groq_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "llama-3.2-11b-vision-preview",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "صف هذه الصورة بالتفصيل باللغة العربية، واشرح ما تحتويه بدقة لمساعدتي في مناقشتها لاحقاً."
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": base64_image
+                        }
+                    }
+                ]
+            }
+        ],
+        "temperature": 0.5,
+        "max_tokens": 1024
+    }
+
+    url = f"{groq_url.rstrip('/')}/chat/completions"
+    try:
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.post(url, headers=headers, json=payload, timeout=60)
+            if response.status_code == 200:
+                data = response.json()
+                return data["choices"][0]["message"]["content"]
+            else:
+                logger.error(f"Groq API returned error status {response.status_code}: {response.text}")
+                return f"⚠️ (خطأ من Groq API: كود الحالة {response.status_code})"
+    except Exception as e:
+        logger.error(f"Error calling Groq Vision API: {e}")
+        return f"⚠️ (خطأ في استدعاء Groq API: {str(e)})"
+
 @decorators.PrintMessage
 @decorators.GroupAuthorization
 @decorators.Authorization
@@ -212,12 +306,36 @@ async def command_bot(update, context, title="", has_command=True):
             if robot.__class__.__name__ == "chatgpt":
                 engine_type = "gpt"
             if image_url:
-                message_list = []
-                image_message = await get_image_message(image_url, engine_type)
-                text_message = await get_text_message(message, engine_type)
-                message_list.append(text_message)
-                message_list.append(image_message)
-                message = message_list
+                if is_deepseek_model(engine):
+                    lang = get_current_lang(convo_id)
+                    thinking_text = "🎨 جاري تحليل الصورة عبر Groq Vision..."
+                    if lang == "en":
+                        thinking_text = "🎨 Analyzing image via Groq Vision..."
+                    
+                    status_msg = await context.bot.send_message(
+                        chat_id=chatid,
+                        message_thread_id=message_thread_id,
+                        text=escape(thinking_text),
+                        parse_mode='MarkdownV2',
+                        reply_to_message_id=messageid
+                    )
+                    
+                    description = await describe_image_via_groq(image_url)
+                    
+                    try:
+                        await context.bot.delete_message(chat_id=chatid, message_id=status_msg.message_id)
+                    except Exception:
+                        pass
+                    
+                    caption_part = f"\nاستفسار المستخدم حول الصورة: {message}" if message else ""
+                    message = f"[صورة مرفوعة من المستخدم]\nوصف الصورة: {description}{caption_part}"
+                else:
+                    message_list = []
+                    image_message = await get_image_message(image_url, engine_type)
+                    text_message = await get_text_message(message, engine_type)
+                    message_list.append(text_message)
+                    message_list.append(image_message)
+                    message = message_list
             elif file_url:
                 image_url = file_url
                 message = await Document_extract(file_url, image_url, engine_type) + message
@@ -722,6 +840,46 @@ async def button_press(update, context):
             except Exception as e:
                 logger.info(e)
                 pass
+        elif data.startswith("PERSONA_"):
+            persona_key = data[8:]
+            if persona_key in PERSONAS:
+                user_lang = Users.get_config(convo_id, "language")
+                from datetime import datetime
+                date_str = datetime.now().strftime("%Y-%m-%d")
+                prompt_template = PERSONAS[persona_key]["prompt"]
+                new_prompt = prompt_template.format(language=user_lang, date=date_str)
+                
+                Users.set_config(convo_id, "systemprompt", new_prompt)
+                reset_ENGINE(convo_id, new_prompt)
+                
+                persona_name = PERSONAS[persona_key]["name"]
+                await callback_query.answer(f"تم تغيير الشخصية بنجاح إلى: {persona_name}", show_alert=True)
+                
+                keyboard = []
+                row = []
+                for key, persona in PERSONAS.items():
+                    is_active = (key == persona_key)
+                    status_prefix = "✅ " if is_active else ""
+                    row.append(InlineKeyboardButton(f"{status_prefix}{persona['name']}", callback_data=f"PERSONA_{key}"))
+                    if len(row) == 2:
+                        keyboard.append(row)
+                        row = []
+                if row:
+                    keyboard.append(row)
+                keyboard.append([InlineKeyboardButton("⬅️ رجوع / Back", callback_data="BACK")])
+                
+                text = (
+                    "🎭 **شخصيات الذكاء الاصطناعي (AI Personas)**\n\n"
+                    "اختر الشخصية أو الدور الذي ترغب في أن يلعبه البوت من القائمة أدناه لتغيير أسلوب ردوده ولغته:"
+                )
+                try:
+                    await callback_query.edit_message_text(
+                        text=escape(text),
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode='MarkdownV2'
+                    )
+                except Exception as e:
+                    logger.info(e)
         elif data.startswith("MODELS"):
             message = await callback_query.edit_message_text(
                 text=escape(info_message + banner),
@@ -939,6 +1097,43 @@ async def handle_file(update, context):
             return
     if image_url == None and file_url:
         image_url = file_url
+
+    if is_deepseek_model(engine) and image_url:
+        lang = get_current_lang(convo_id)
+        thinking_text = "🎨 جاري تحليل الصورة باستخدام نموذج الرؤية الهجين من Groq..."
+        if lang == "en":
+            thinking_text = "🎨 Analyzing image using hybrid vision model..."
+        
+        status_msg = await context.bot.send_message(
+            chat_id=chatid,
+            message_thread_id=message_thread_id,
+            text=escape(thinking_text),
+            parse_mode='MarkdownV2'
+        )
+        
+        description = await describe_image_via_groq(image_url)
+        
+        try:
+            await context.bot.delete_message(chat_id=chatid, message_id=status_msg.message_id)
+        except Exception:
+            pass
+            
+        formatted_message = f"[صورة مرفوعة من المستخدم]\nوصف الصورة: {description}"
+        robot.add_to_conversation(formatted_message, role, convo_id)
+        
+        if Users.get_config(convo_id, "FILE_UPLOAD_MESS"):
+            success_text = "✅ تم تحليل الصورة وإضافتها إلى سياق المحادثة. يمكنك الآن مناقشتها مع DeepSeek!"
+            if lang == "en":
+                success_text = "✅ Image analyzed and added to context. You can now discuss it with DeepSeek!"
+            msg = await context.bot.send_message(
+                chat_id=chatid,
+                message_thread_id=message_thread_id,
+                text=escape(success_text),
+                parse_mode='MarkdownV2'
+            )
+            await delete_message(update, context, [msg.message_id])
+        return
+
     engine_type, _ = get_engine({"base_url": api_url}, endpoint=None, original_model=engine)
     if robot.__class__.__name__ == "chatgpt":
         engine_type = "gpt"
@@ -1037,6 +1232,51 @@ async def change_model(update, context):
         text=escape(strings['model_changed'][lang].format(model_name=model_name), italic=False),
         parse_mode='MarkdownV2',
         reply_to_message_id=user_message_id,
+    )
+
+@decorators.GroupAuthorization
+@decorators.Authorization
+async def persona_command(update, context):
+    """Command to change the AI persona"""
+    _, _, _, chatid, user_message_id, _, _, message_thread_id, convo_id, _, _, _ = await GetMesageInfo(update, context)
+    
+    current_prompt = Users.get_config(convo_id, "systemprompt")
+    
+    keyboard = []
+    row = []
+    for key, persona in PERSONAS.items():
+        is_active = False
+        if key == "general" and "Respond conversationally" in current_prompt and "expert" not in current_prompt and "Tutor" not in current_prompt and "storyteller" not in current_prompt:
+            is_active = True
+        elif key == "coder" and "expert software engineer" in current_prompt:
+            is_active = True
+        elif key == "english" and "English Tutor" in current_prompt:
+            is_active = True
+        elif key == "writer" and "creative writer" in current_prompt:
+            is_active = True
+            
+        status_prefix = "✅ " if is_active else ""
+        row.append(InlineKeyboardButton(f"{status_prefix}{persona['name']}", callback_data=f"PERSONA_{key}"))
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+        
+    keyboard.append([InlineKeyboardButton("⬅️ رجوع / Back", callback_data="BACK")])
+    
+    text = (
+        "🎭 **شخصيات الذكاء الاصطناعي (AI Personas)**\n\n"
+        "اختر الشخصية أو الدور الذي ترغب في أن يلعبه البوت من القائمة أدناه لتغيير أسلوب ردوده ولغته:"
+    )
+    
+    await context.bot.send_message(
+        chat_id=chatid,
+        message_thread_id=message_thread_id,
+        text=escape(text),
+        parse_mode='MarkdownV2',
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        reply_to_message_id=user_message_id
     )
 
 @decorators.GroupAuthorization
@@ -1275,6 +1515,8 @@ async def post_init(application: Application) -> None:
         BotCommand('start', 'Start the bot'),
         BotCommand('model', 'Change AI model'),
         BotCommand('image', 'Generate an image'),
+        BotCommand('draw', 'Generate an image (alias for /image)'),
+        BotCommand('persona', 'Change AI Persona'),
     ])
     description = (
         "I am an Assistant, a large language model trained by OpenAI. I will do my best to help answer your questions."
@@ -1306,6 +1548,8 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler("reset", reset_chat))
     application.add_handler(CommandHandler("model", change_model))
     application.add_handler(CommandHandler("image", image_command))
+    application.add_handler(CommandHandler("draw", image_command))
+    application.add_handler(CommandHandler("persona", persona_command))
     application.add_handler(InlineQueryHandler(inlinequery))
     application.add_handler(CallbackQueryHandler(button_press))
     application.add_handler(MessageHandler((filters.TEXT | filters.VOICE) & ~filters.COMMAND, lambda update, context: command_bot(update, context, has_command=False), block = False))
