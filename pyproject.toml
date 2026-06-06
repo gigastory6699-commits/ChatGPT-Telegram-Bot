@@ -22,4 +22,9 @@ dependencies = [
     "pytz>=2025.2",
     "requests>=2.32.5",
     "edge-tts>=6.1.12",
+    "curl-cffi==0.8.1b9",
+    "wasmtime",
+    "numpy",
+    "nodriver",
+    "drissionpage",
 ]
