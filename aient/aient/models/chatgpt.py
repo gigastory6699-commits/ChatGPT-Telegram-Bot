@@ -715,6 +715,75 @@ class chatgpt(BaseLLM):
             self.reset(convo_id=convo_id, system_prompt=self.system_prompt)
         self.add_to_conversation(prompt, role, convo_id=convo_id, function_name=function_name, total_tokens=total_tokens, function_arguments=function_arguments, pass_history=pass_history, function_call_id=function_call_id)
 
+        # Check if we should use the custom DeepSeek Free API
+        if "deepseek-free" in model.lower() or "deepseek-v3" in model.lower() or "deepseek-r1" in model.lower() or model.lower() == "dsk":
+            token = kwargs.get('api_key') or self.api_key
+            if not token:
+                yield "Error: DeepSeek Free API token not configured. Please check your config."
+                return
+
+            latest_text = ""
+            if isinstance(prompt, str):
+                latest_text = prompt
+            elif isinstance(prompt, list):
+                for part in prompt:
+                    if isinstance(part, dict) and part.get("type") == "text":
+                        latest_text += part.get("text", "")
+                    elif hasattr(part, "text"):
+                        latest_text += part.text
+                    elif isinstance(part, str):
+                        latest_text += part
+            else:
+                latest_text = str(prompt)
+
+            try:
+                from dsk.api import DeepSeekAPI
+                
+                # Check/create session
+                if not hasattr(self, 'dsk_sessions'):
+                    self.dsk_sessions = {}
+                
+                if convo_id not in self.dsk_sessions:
+                    api = DeepSeekAPI(token)
+                    self.dsk_sessions[convo_id] = api.create_chat_session()
+                
+                chat_session_id = self.dsk_sessions[convo_id]
+                api = DeepSeekAPI(token)
+                
+                # Run completion
+                full_response = ""
+                thinking_enabled = "think" in model.lower() or "reasoner" in model.lower() or "r1" in model.lower()
+                
+                has_yielded_think_start = False
+                has_yielded_think_end = False
+                
+                for chunk in api.chat_completion(chat_session_id, latest_text, thinking_enabled=thinking_enabled):
+                    chunk_type = chunk.get('type')
+                    content = chunk.get('content', '')
+                    if not isinstance(content, str):
+                        content = str(content)
+                    
+                    if chunk_type == 'thinking':
+                        if not has_yielded_think_start:
+                            yield "<think>\n"
+                            has_yielded_think_start = True
+                        yield content
+                    elif chunk_type == 'text':
+                        if has_yielded_think_start and not has_yielded_think_end:
+                            yield "\n</think>\n"
+                            has_yielded_think_end = True
+                        full_response += content
+                        yield content
+                
+                if has_yielded_think_start and not has_yielded_think_end:
+                    yield "\n</think>\n"
+                
+                self.add_to_conversation(full_response, "assistant", convo_id=convo_id, total_tokens=0, pass_history=pass_history)
+                return
+            except Exception as e:
+                yield f"Error calling DeepSeek Free API: {str(e)}"
+                return
+
         # 获取请求体
         url, headers, json_post, engine_type = await self.get_post_body(prompt, role, convo_id, model, pass_history, stream=stream, **kwargs)
         self.truncate_conversation(convo_id=convo_id)
@@ -1024,3 +1093,5 @@ class chatgpt(BaseLLM):
         )
         self.tokens_usage[convo_id] = 0
         self.current_tokens[convo_id] = 0
+        if hasattr(self, 'dsk_sessions') and convo_id in self.dsk_sessions:
+            del self.dsk_sessions[convo_id]

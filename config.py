@@ -484,6 +484,10 @@ initial_model = [
     "claude-sonnet-4-20250514",
     "gemini-2.5-flash",
     "gemini-2.5-pro",
+    "deepseek-free",
+    "deepseek-free-think",
+    "DeepSeek-V3",
+    "DeepSeek-R1",
 ]
 
 def remove_no_text_model(model_list):
