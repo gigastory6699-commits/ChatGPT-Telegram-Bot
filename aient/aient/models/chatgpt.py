@@ -753,11 +753,12 @@ class chatgpt(BaseLLM):
                 # Run completion
                 full_response = ""
                 thinking_enabled = "think" in model.lower() or "reasoner" in model.lower() or "r1" in model.lower()
+                search_enabled = "search" in model.lower() or "web" in model.lower()
                 
                 has_yielded_think_start = False
                 has_yielded_think_end = False
                 
-                for chunk in api.chat_completion(chat_session_id, latest_text, thinking_enabled=thinking_enabled):
+                for chunk in api.chat_completion(chat_session_id, latest_text, thinking_enabled=thinking_enabled, search_enabled=search_enabled):
                     chunk_type = chunk.get('type')
                     content = chunk.get('content', '')
                     if not isinstance(content, str):

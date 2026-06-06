@@ -488,6 +488,8 @@ initial_model = [
     "deepseek-free-think",
     "DeepSeek-V3",
     "DeepSeek-R1",
+    "DeepSeek-V3-Search",
+    "DeepSeek-R1-Search",
 ]
 
 def remove_no_text_model(model_list):

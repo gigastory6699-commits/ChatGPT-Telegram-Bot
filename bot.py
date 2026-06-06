@@ -545,7 +545,7 @@ async def getChatGPT(update_message, context, title, robot, message, chatid, mes
 
     # Voice Reply logic
     is_voice_input = bool(update_message.voice) if update_message and hasattr(update_message, 'voice') and update_message.voice else False
-    is_voice_reply_enabled = is_voice_input
+    is_voice_reply_enabled = is_voice_input or Users.get_config(convo_id, "VOICE_REPLY")
     logger.info(f"Checking VOICE_REPLY status: Enabled={is_voice_reply_enabled}, text={bool(tmpresult.strip())}")
     if is_voice_reply_enabled and tmpresult.strip():
         try:
