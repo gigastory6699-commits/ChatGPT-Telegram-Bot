@@ -508,8 +508,10 @@ def remove_no_text_model(model_list):
 
 async def get_initial_model():
     global initial_model
-    robot, role, api_key, api_url = get_robot()
     engine = Users.get_config(None, "engine")
+    if engine and ("deepseek-free" in engine.lower() or "deepseek-v3" in engine.lower() or "deepseek-r1" in engine.lower() or engine.lower() == "dsk"):
+        return
+    robot, role, api_key, api_url = get_robot()
     provider = {
         "provider": "openai",
         "base_url": api_url,
