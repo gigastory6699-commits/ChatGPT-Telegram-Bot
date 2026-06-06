@@ -296,7 +296,14 @@ def InitEngine(chat_id=None):
     if api_key:
         ChatGPTbot = chatgpt(temperature=temperature, print_log=True, api_url=api_url, api_key=api_key, retry_count=3)
         SummaryBot = chatgpt(temperature=temperature, use_plugins=False, print_log=True, api_url=api_url, api_key=api_key, retry_count=3)
-        whisperBot = whisper(api_key=api_key, api_url=api_url)
+        whisper_key = api_key
+        whisper_url = api_url
+        groq_key = os.environ.get("GROQ_API_KEY", "")
+        groq_url = os.environ.get("GROQ_BASE_URL", "")
+        if groq_key and not api_key.startswith("sk-") and not api_key.startswith("gsk_"):
+            whisper_key = groq_key
+            whisper_url = groq_url
+        whisperBot = whisper(api_key=whisper_key, api_url=whisper_url)
 
 def update_language_status(language, chat_id=None):
     global Users
