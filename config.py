@@ -53,6 +53,13 @@ PREFERENCES = {
     # "TYPING"            : (os.environ.get('TYPING', "False") == "False") == False,
     "REPLY"             : (os.environ.get('REPLY', "False") == "False") == False,
     "VOICE_REPLY"       : (os.environ.get('VOICE_REPLY', "False") == "False") == False,
+    "activation"        : "mention",
+    "send_policy"       : "on",
+    "think_level"       : "medium",
+    "verbose_mode"      : "off",
+    "reasoning_mode"    : "on",
+    "elevated_mode"     : "off",
+    "bot_disabled"      : False,
 }
 
 LANGUAGE = os.environ.get('LANGUAGE', 'English')

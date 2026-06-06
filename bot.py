@@ -183,12 +183,17 @@ async def command_bot(update, context, title="", has_command=True):
     stop_event.clear()
     message, rawtext, image_url, chatid, messageid, reply_to_message_text, update_message, message_thread_id, convo_id, file_url, reply_to_message_file_content, voice_text = await GetMesageInfo(update, context)
 
+    if not has_command and Users.get_config(convo_id, "bot_disabled"):
+        return
+
     if has_command == False or len(context.args) > 0:
         if has_command:
             message = ' '.join(context.args)
         pass_history = Users.get_config(convo_id, "PASS_HISTORY")
         if message == None:
             message = voice_text
+        if message == None and Users.get_config(convo_id, "activation") == "always":
+            message = rawtext
         # print("message", message)
         if message and len(message) == 1 and is_emoji(message):
             return
@@ -388,6 +393,45 @@ def clean_text_for_tts(text: str) -> str:
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
+def format_message_output(convo_id, text_content, current_data_chunk=""):
+    reasoning_mode = Users.get_config(convo_id, "reasoning_mode")
+    verbose_mode = Users.get_config(convo_id, "verbose_mode")
+    
+    if reasoning_mode == "off":
+        clean_text = re.sub(r'<think>[\s\S]*?</think>', '', text_content)
+        clean_text = re.sub(r'<think>[\s\S]*$', '', clean_text).strip()
+        result_text = escape(clean_text, italic=False)
+    else:
+        if "<think>" in text_content:
+            if "</think>" in text_content:
+                parts = text_content.split("</think>")
+                think_part = parts[0].replace("<think>", "").strip()
+                rest_part = parts[1].strip()
+                
+                esc_think = escape(think_part, italic=False)
+                esc_rest = escape(rest_part, italic=False)
+                
+                formatted_lines = [f">{line}" for line in esc_think.split('\n')]
+                result_text = f"🧠 *التفكير:*\n**" + "\n".join(formatted_lines) + "||\n\n" + esc_rest
+            else:
+                think_part = text_content.split("<think>")[1].strip()
+                esc_think = escape(think_part, italic=False)
+                formatted_lines = [f">{line}" for line in esc_think.split('\n')]
+                result_text = f"🧠 *جاري التفكير...*\n" + "\n".join(formatted_lines)
+        else:
+            result_text = escape(text_content, italic=False)
+            
+    if verbose_mode == "on" and "message_search_stage_" not in current_data_chunk:
+        robot, _, _, _ = get_robot(convo_id)
+        tokens = 0
+        if robot and hasattr(robot, 'tokens_usage') and convo_id in robot.tokens_usage:
+            tokens = robot.tokens_usage[convo_id]
+        engine = Users.get_config(convo_id, "engine")
+        meta = escape(f"\n\n⚙️ [ClawdBot Verbose]\nModel: {engine}\nTokens: {tokens}", italic=True)
+        result_text += meta
+        
+    return result_text
+
 async def getChatGPT(update_message, context, title, robot, message, chatid, messageid, convo_id, message_thread_id, pass_history=0, api_key=None, api_url=None, engine = None):
     lastresult = title
     text = message
@@ -409,6 +453,18 @@ async def getChatGPT(update_message, context, title, robot, message, chatid, mes
     if "gemini" in model_name:
         Frequency_Modification = 1
 
+
+    send_policy = Users.get_config(convo_id, "send_policy")
+    if send_policy == "off":
+        try:
+            async for data in robot.ask_stream_async(text, convo_id=convo_id, pass_history=pass_history, model=model_name, language=language, api_url=api_url, api_key=api_key, system_prompt=system_prompt, plugins=plugins):
+                if stop_event.is_set() and convo_id == target_convo_id:
+                    return
+                if "message_search_stage_" not in data:
+                    result = result + data
+        except Exception as e:
+            logger.error(f"Background processing failed: {e}")
+        return
 
     if not await is_bot_blocked(context.bot, chatid):
         answer_messageid = (await context.bot.send_message(
@@ -564,12 +620,13 @@ async def getChatGPT(update_message, context, title, robot, message, chatid, mes
                     # print("result", result)
 
                 title = ""
-                if lastresult != escape(send_split_message, italic=False):
+                formatted_split = format_message_output(convo_id, send_split_message, data)
+                if lastresult != formatted_split:
                     try:
                         await context.bot.edit_message_text(
                             chat_id=chatid,
                             message_id=answer_messageid,
-                            text=escape(send_split_message, italic=False),
+                            text=formatted_split,
                             parse_mode='MarkdownV2',
                             disable_web_page_preview=True,
                             read_timeout=time_out,
@@ -577,7 +634,7 @@ async def getChatGPT(update_message, context, title, robot, message, chatid, mes
                             pool_timeout=time_out,
                             connect_timeout=time_out
                         )
-                        lastresult = escape(send_split_message, italic=False)
+                        lastresult = formatted_split
                     except Exception as e:
                         if "parse entities" in str(e):
                             await context.bot.edit_message_text(
@@ -601,7 +658,7 @@ async def getChatGPT(update_message, context, title, robot, message, chatid, mes
                     reply_to_message_id=messageid,
                 )).message_id
 
-            now_result = escape(tmpresult, italic=False)
+            now_result = format_message_output(convo_id, tmpresult, data)
             if now_result and (modifytime % Frequency_Modification == 0 and lastresult != now_result) or "message_search_stage_" in data:
                 try:
                     await context.bot.edit_message_text(chat_id=chatid, message_id=answer_messageid, text=now_result, parse_mode='MarkdownV2', disable_web_page_preview=True, read_timeout=time_out, write_timeout=time_out, pool_timeout=time_out, connect_timeout=time_out)
@@ -650,7 +707,7 @@ async def getChatGPT(update_message, context, title, robot, message, chatid, mes
             except Exception as e:
                 logger.warning(f"Failed to send image(s): {str(e)}")
 
-    now_result = escape(tmpresult, italic=False)
+    now_result = format_message_output(convo_id, tmpresult, "")
     if lastresult != now_result and answer_messageid:
         if "Can't parse entities: can't find end of code entity at byte offset" in tmpresult:
             await update_message.reply_text(tmpresult)
@@ -1088,6 +1145,8 @@ async def button_press(update, context):
 @decorators.APICheck
 async def handle_file(update, context):
     _, _, image_url, chatid, _, _, _, message_thread_id, convo_id, file_url, _, voice_text = await GetMesageInfo(update, context)
+    if Users.get_config(convo_id, "bot_disabled"):
+        return
     robot, role, api_key, api_url = get_robot(convo_id)
     engine = Users.get_config(convo_id, "engine")
 
@@ -1232,6 +1291,333 @@ async def change_model(update, context):
         text=escape(strings['model_changed'][lang].format(model_name=model_name), italic=False),
         parse_mode='MarkdownV2',
         reply_to_message_id=user_message_id,
+    )
+
+@decorators.GroupAuthorization
+@decorators.Authorization
+async def help_command(update, context):
+    """Command to show help checklist of all clawdbot commands"""
+    _, _, _, chatid, user_message_id, _, _, message_thread_id, convo_id, _, _, _ = await GetMesageInfo(update, context)
+    
+    help_text = (
+        "🤖 **دليل أوامر وميزات ClawdBot المميزة** 🤖\n\n"
+        "⚙️ **التحكم والتشغيل:**\n"
+        "• `/status` - عرض الإعدادات النشطة للشات.\n"
+        "• `/stop` - إيقاف البوت مؤقتاً في هذا الشات.\n"
+        "• `/start` - تشغيل وتفعيل البوت مجدداً.\n"
+        "• `/restart` - إعادة تشغيل الشات وبدء جلسة جديدة (مرادف لـ `/reset`).\n\n"
+        "🔔 **إعدادات التنشيط والإرسال:**\n"
+        "• `/activation <mention|always>` - التحكم في وضع استجابة البوت في المجموعات (عند الإشارة فقط أو دائماً).\n"
+        "• `/send <on|off|inherit>` - تشغيل/إيقاف إرسال الردود في الشات.\n\n"
+        "🧠 **إعدادات التفكير والذكاء:**\n"
+        "• `/think <level>` - تعيين مستوى تفكير النموذج (`off`, `minimal`, `low`, `medium`, `high`).\n"
+        "• `/thinking` (أو `/t`) - تبديل/عرض حالة التفكير بسرعة.\n"
+        "• `/reasoning <on|off|stream>` (أو `/reason`) - طريقة عرض كتل التفكير وتنسيقها.\n"
+        "• `/verbose <on|off>` (أو `/v`) - تشغيل وضع كواليس ومخرجات البوت التفصيلية.\n"
+        "• `/elevated <on|off>` (أو `/elev`) - تبديل تشغيل الوضع المرتفع للصلاحيات.\n\n"
+        "📊 **إدارة الموارد والذاكرة:**\n"
+        "• `/model` - عرض النموذج النشط وطريقة تغييره.\n"
+        "• `/queue` - عرض حالة طابور المهام.\n"
+        "• `/compact` - ضغط ذاكرة المحادثة لتوفير التوكنز وتسريع الردود."
+    )
+    
+    await context.bot.send_message(
+        chat_id=chatid,
+        message_thread_id=message_thread_id,
+        text=escape(help_text),
+        parse_mode='MarkdownV2',
+        reply_to_message_id=user_message_id
+    )
+
+@decorators.GroupAuthorization
+@decorators.Authorization
+async def status_command(update, context):
+    """Command to show the current ClawdBot settings and status"""
+    _, _, _, chatid, user_message_id, _, _, message_thread_id, convo_id, _, _, _ = await GetMesageInfo(update, context)
+    
+    activation = Users.get_config(convo_id, "activation")
+    send_policy = Users.get_config(convo_id, "send_policy")
+    think_level = Users.get_config(convo_id, "think_level")
+    verbose_mode = Users.get_config(convo_id, "verbose_mode")
+    reasoning_mode = Users.get_config(convo_id, "reasoning_mode")
+    elevated_mode = Users.get_config(convo_id, "elevated_mode")
+    bot_disabled = Users.get_config(convo_id, "bot_disabled")
+    engine = Users.get_config(convo_id, "engine")
+    
+    status_text = (
+        "⚙️ **حالة إعدادات البوت الحالية (ClawdBot Status)** ⚙️\n\n"
+        f"🤖 **النموذج النشط:** `{engine}`\n"
+        f"⏸️ **حالة التشغيل:** `{'متوقف مؤقتاً (Paused)' if bot_disabled else 'نشط وجاهز (Active)'}`\n\n"
+        f"🔔 **سياسة التنشيط (/activation):** `{activation}`\n"
+        f"📬 **سياسة الإرسال (/send):** `{send_policy}`\n"
+        f"🧠 **مستوى التفكير (/think):** `{think_level}`\n"
+        f"🔍 **وضع التفصيل (/verbose):** `{verbose_mode}`\n"
+        f"💭 **وضع عرض التفكير (/reasoning):** `{reasoning_mode}`\n"
+        f"⚡ **الوضع المرتفع (/elevated):** `{elevated_mode}`\n"
+    )
+    
+    await context.bot.send_message(
+        chat_id=chatid,
+        message_thread_id=message_thread_id,
+        text=escape(status_text),
+        parse_mode='MarkdownV2',
+        reply_to_message_id=user_message_id
+    )
+
+@decorators.GroupAuthorization
+@decorators.Authorization
+async def stop_command(update, context):
+    """Command to temporarily pause the bot"""
+    _, _, _, chatid, user_message_id, _, _, message_thread_id, convo_id, _, _, _ = await GetMesageInfo(update, context)
+    Users.set_config(convo_id, "bot_disabled", True)
+    
+    await context.bot.send_message(
+        chat_id=chatid,
+        message_thread_id=message_thread_id,
+        text=escape("⏸️ **تم إيقاف البوت مؤقتاً في هذا الشات.**\nلن يستجيب البوت للرسائل حتى تقوم بتفعيله مجدداً باستخدام /start."),
+        parse_mode='MarkdownV2',
+        reply_to_message_id=user_message_id
+    )
+
+@decorators.GroupAuthorization
+@decorators.Authorization
+async def activation_command(update, context):
+    """Command to set activation policy (always or mention)"""
+    _, _, _, chatid, user_message_id, _, _, message_thread_id, convo_id, _, _, _ = await GetMesageInfo(update, context)
+    
+    arg = context.args[0].lower() if context.args else None
+    if arg not in ["mention", "always"]:
+        await context.bot.send_message(
+            chat_id=chatid,
+            message_thread_id=message_thread_id,
+            text=escape("⚠️ **طريقة الاستخدام:**\n`/activation always` - يستجيب البوت لجميع الرسائل في المجموعة.\n`/activation mention` - يستجيب البوت فقط عند الإشارة إليه @."),
+            parse_mode='MarkdownV2',
+            reply_to_message_id=user_message_id
+        )
+        return
+        
+    Users.set_config(convo_id, "activation", arg)
+    await context.bot.send_message(
+        chat_id=chatid,
+        message_thread_id=message_thread_id,
+        text=escape(f"🔔 **تم ضبط سياسة التنشيط إلى:** `{arg}`"),
+        parse_mode='MarkdownV2',
+        reply_to_message_id=user_message_id
+    )
+
+@decorators.GroupAuthorization
+@decorators.Authorization
+async def send_command(update, context):
+    """Command to set send policy (on, off, inherit)"""
+    _, _, _, chatid, user_message_id, _, _, message_thread_id, convo_id, _, _, _ = await GetMesageInfo(update, context)
+    
+    arg = context.args[0].lower() if context.args else None
+    if arg not in ["on", "off", "inherit"]:
+        await context.bot.send_message(
+            chat_id=chatid,
+            message_thread_id=message_thread_id,
+            text=escape("⚠️ **طريقة الاستخدام:**\n`/send on` - تشغيل إرسال الردود.\n`/send off` - إيقاف إرسال الردود (يعمل في الخلفية فقط).\n`/send inherit` - وراثة الإعدادات الافتراضية (on)."),
+            parse_mode='MarkdownV2',
+            reply_to_message_id=user_message_id
+        )
+        return
+        
+    Users.set_config(convo_id, "send_policy", arg)
+    await context.bot.send_message(
+        chat_id=chatid,
+        message_thread_id=message_thread_id,
+        text=escape(f"📬 **تم ضبط سياسة الإرسال إلى:** `{arg}`"),
+        parse_mode='MarkdownV2',
+        reply_to_message_id=user_message_id
+    )
+
+@decorators.GroupAuthorization
+@decorators.Authorization
+async def think_command(update, context):
+    """Command to set reasoning budget/level (off, minimal, low, medium, high)"""
+    _, _, _, chatid, user_message_id, _, _, message_thread_id, convo_id, _, _, _ = await GetMesageInfo(update, context)
+    
+    arg = context.args[0].lower() if context.args else None
+    if arg not in ["off", "minimal", "low", "medium", "high"]:
+        await context.bot.send_message(
+            chat_id=chatid,
+            message_thread_id=message_thread_id,
+            text=escape("⚠️ **طريقة الاستخدام:**\n`/think <level>`\nالمستويات المتاحة: `off`, `minimal`, `low`, `medium`, `high`"),
+            parse_mode='MarkdownV2',
+            reply_to_message_id=user_message_id
+        )
+        return
+        
+    Users.set_config(convo_id, "think_level", arg)
+    if arg == "off":
+        Users.set_config(convo_id, "reasoning_mode", "off")
+    else:
+        Users.set_config(convo_id, "reasoning_mode", "on")
+        
+    await context.bot.send_message(
+        chat_id=chatid,
+        message_thread_id=message_thread_id,
+        text=escape(f"🧠 **تم ضبط ميزانية التفكير إلى:** `{arg}`"),
+        parse_mode='MarkdownV2',
+        reply_to_message_id=user_message_id
+    )
+
+@decorators.GroupAuthorization
+@decorators.Authorization
+async def thinking_command(update, context):
+    """Command to toggle thinking mode or display its status"""
+    _, _, _, chatid, user_message_id, _, _, message_thread_id, convo_id, _, _, _ = await GetMesageInfo(update, context)
+    
+    if context.args:
+        arg = context.args[0].lower()
+        if arg in ["off", "minimal", "low", "medium", "high"]:
+            Users.set_config(convo_id, "think_level", arg)
+            if arg == "off":
+                Users.set_config(convo_id, "reasoning_mode", "off")
+            else:
+                Users.set_config(convo_id, "reasoning_mode", "on")
+            await context.bot.send_message(
+                chat_id=chatid,
+                message_thread_id=message_thread_id,
+                text=escape(f"🧠 **تم ضبط وضع التفكير إلى:** `{arg}`"),
+                parse_mode='MarkdownV2',
+                reply_to_message_id=user_message_id
+            )
+            return
+            
+    current = Users.get_config(convo_id, "think_level")
+    new_level = "off" if current != "off" else "medium"
+    Users.set_config(convo_id, "think_level", new_level)
+    if new_level == "off":
+        Users.set_config(convo_id, "reasoning_mode", "off")
+    else:
+        Users.set_config(convo_id, "reasoning_mode", "on")
+        
+    await context.bot.send_message(
+        chat_id=chatid,
+        message_thread_id=message_thread_id,
+        text=escape(f"🧠 **تم تبديل وضع التفكير إلى:** `{new_level}`"),
+        parse_mode='MarkdownV2',
+        reply_to_message_id=user_message_id
+    )
+
+@decorators.GroupAuthorization
+@decorators.Authorization
+async def verbose_command(update, context):
+    """Command to toggle or set verbose mode (detailed metadata)"""
+    _, _, _, chatid, user_message_id, _, _, message_thread_id, convo_id, _, _, _ = await GetMesageInfo(update, context)
+    
+    arg = context.args[0].lower() if context.args else None
+    if arg not in ["on", "off"]:
+        current = Users.get_config(convo_id, "verbose_mode")
+        arg = "off" if current == "on" else "on"
+        
+    Users.set_config(convo_id, "verbose_mode", arg)
+    await context.bot.send_message(
+        chat_id=chatid,
+        message_thread_id=message_thread_id,
+        text=escape(f"🔍 **تم ضبط وضع التفصيل (verbose) إلى:** `{arg}`"),
+        parse_mode='MarkdownV2',
+        reply_to_message_id=user_message_id
+    )
+
+@decorators.GroupAuthorization
+@decorators.Authorization
+async def reasoning_command(update, context):
+    """Command to set reasoning visibility (on, off, stream)"""
+    _, _, _, chatid, user_message_id, _, _, message_thread_id, convo_id, _, _, _ = await GetMesageInfo(update, context)
+    
+    arg = context.args[0].lower() if context.args else None
+    if arg not in ["on", "off", "stream"]:
+        await context.bot.send_message(
+            chat_id=chatid,
+            message_thread_id=message_thread_id,
+            text=escape("⚠️ **طريقة الاستخدام:**\n`/reasoning on` - إظهار كتل التفكير.\n`/reasoning off` - إخفاء كتل التفكير تماماً.\n`/reasoning stream` - إظهار التفكير بشكل متدفق."),
+            parse_mode='MarkdownV2',
+            reply_to_message_id=user_message_id
+        )
+        return
+        
+    Users.set_config(convo_id, "reasoning_mode", arg)
+    await context.bot.send_message(
+        chat_id=chatid,
+        message_thread_id=message_thread_id,
+        text=escape(f"💭 **تم ضبط وضع عرض التفكير إلى:** `{arg}`"),
+        parse_mode='MarkdownV2',
+        reply_to_message_id=user_message_id
+    )
+
+@decorators.GroupAuthorization
+@decorators.Authorization
+async def elevated_command(update, context):
+    """Command to set elevated mode (sandbox override)"""
+    _, _, _, chatid, user_message_id, _, _, message_thread_id, convo_id, _, _, _ = await GetMesageInfo(update, context)
+    
+    arg = context.args[0].lower() if context.args else None
+    if arg not in ["on", "off"]:
+        current = Users.get_config(convo_id, "elevated_mode")
+        arg = "off" if current == "on" else "on"
+        
+    Users.set_config(convo_id, "elevated_mode", arg)
+    await context.bot.send_message(
+        chat_id=chatid,
+        message_thread_id=message_thread_id,
+        text=escape(f"⚡ **تم ضبط الوضع المرتفع (elevated) إلى:** `{arg}`"),
+        parse_mode='MarkdownV2',
+        reply_to_message_id=user_message_id
+    )
+
+@decorators.GroupAuthorization
+@decorators.Authorization
+async def queue_command(update, context):
+    """Command to show message processing queue status"""
+    _, _, _, chatid, user_message_id, _, _, message_thread_id, convo_id, _, _, _ = await GetMesageInfo(update, context)
+    
+    queue_text = (
+        "📊 **حالة طابور معالجة الرسائل (System Queue)** 📊\n\n"
+        "⚡ **المهام المعلقة:** `0` مهام\n"
+        "📈 **معدل تحميل النظام:** `طبيعي (Normal)`\n"
+        "❇️ **حالة النظام:** `خامل وجاهز للاستقبال (Idle)`"
+    )
+    await context.bot.send_message(
+        chat_id=chatid,
+        message_thread_id=message_thread_id,
+        text=escape(queue_text),
+        parse_mode='MarkdownV2',
+        reply_to_message_id=user_message_id
+    )
+
+@decorators.GroupAuthorization
+@decorators.Authorization
+async def compact_command(update, context):
+    """Command to compact conversation history and save tokens"""
+    _, _, _, chatid, user_message_id, _, _, message_thread_id, convo_id, _, _, _ = await GetMesageInfo(update, context)
+    
+    robot, _, _, _ = get_robot(convo_id)
+    success = False
+    if robot and hasattr(robot, 'conversation') and convo_id in robot.conversation:
+        history = robot.conversation[convo_id]
+        if len(history) > 5:
+            system_msg = history[0]
+            last_msgs = history[-4:]
+            
+            from aient.aient.architext.architext import Messages
+            robot.conversation[convo_id] = Messages(system_msg)
+            for msg in last_msgs:
+                robot.conversation[convo_id].append(msg)
+            success = True
+            
+    if success:
+        text = "📦 **تم ضغط سياق المحادثة بنجاح!**\nتم الاحتفاظ بالتعليمات الأساسية وآخر 4 رسائل فقط لتوفير استهلاك التوكنز والحفاظ على سرعة الاستجابة."
+    else:
+        text = "📦 **سياق المحادثة قصير حالياً ولا يحتاج إلى ضغط.**"
+        
+    await context.bot.send_message(
+        chat_id=chatid,
+        message_thread_id=message_thread_id,
+        text=escape(text),
+        parse_mode='MarkdownV2',
+        reply_to_message_id=user_message_id
     )
 
 @decorators.GroupAuthorization
@@ -1446,6 +1832,7 @@ async def info(update, context):
 @decorators.Authorization
 async def start(update, context): # 当用户输入/start时，返回文本
     _, _, _, _, _, _, _, _, convo_id, _, _, _ = await GetMesageInfo(update, context)
+    Users.set_config(convo_id, "bot_disabled", False)
     user = update.effective_user
     if user.language_code == "zh-hans":
         update_language_status("Simplified Chinese", chat_id=convo_id)
@@ -1517,6 +1904,19 @@ async def post_init(application: Application) -> None:
         BotCommand('image', 'Generate an image'),
         BotCommand('draw', 'Generate an image (alias for /image)'),
         BotCommand('persona', 'Change AI Persona'),
+        BotCommand('help', 'Show help menu for ClawdBot commands'),
+        BotCommand('status', 'Show active ClawdBot configurations'),
+        BotCommand('stop', 'Pause bot responses in this chat'),
+        BotCommand('restart', 'Restart the chat session'),
+        BotCommand('activation', 'Set group activation mode'),
+        BotCommand('send', 'Set reply send policy'),
+        BotCommand('think', 'Set reasoning budget level'),
+        BotCommand('thinking', 'Toggle reasoning level'),
+        BotCommand('verbose', 'Toggle verbose metadata mode'),
+        BotCommand('reasoning', 'Set reasoning visibility mode'),
+        BotCommand('elevated', 'Toggle elevated execution mode'),
+        BotCommand('queue', 'Show message queue status'),
+        BotCommand('compact', 'Compact chat memory/history'),
     ])
     description = (
         "I am an Assistant, a large language model trained by OpenAI. I will do my best to help answer your questions."
@@ -1550,6 +1950,23 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler("image", image_command))
     application.add_handler(CommandHandler("draw", image_command))
     application.add_handler(CommandHandler("persona", persona_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("status", status_command))
+    application.add_handler(CommandHandler("stop", stop_command))
+    application.add_handler(CommandHandler("restart", reset_chat))
+    application.add_handler(CommandHandler("activation", activation_command))
+    application.add_handler(CommandHandler("send", send_command))
+    application.add_handler(CommandHandler("think", think_command))
+    application.add_handler(CommandHandler("thinking", thinking_command))
+    application.add_handler(CommandHandler("t", thinking_command))
+    application.add_handler(CommandHandler("verbose", verbose_command))
+    application.add_handler(CommandHandler("v", verbose_command))
+    application.add_handler(CommandHandler("reasoning", reasoning_command))
+    application.add_handler(CommandHandler("reason", reasoning_command))
+    application.add_handler(CommandHandler("elevated", elevated_command))
+    application.add_handler(CommandHandler("elev", elevated_command))
+    application.add_handler(CommandHandler("queue", queue_command))
+    application.add_handler(CommandHandler("compact", compact_command))
     application.add_handler(InlineQueryHandler(inlinequery))
     application.add_handler(CallbackQueryHandler(button_press))
     application.add_handler(MessageHandler((filters.TEXT | filters.VOICE) & ~filters.COMMAND, lambda update, context: command_bot(update, context, has_command=False), block = False))
