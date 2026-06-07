@@ -534,12 +534,18 @@ async def getChatGPT(update_message, context, title, robot, message, chatid, mes
                     
                     if image_result and image_result.startswith(('http://', 'https://', 'data:')):
                         import io
-                        import requests
+                        from curl_cffi import requests as curl_requests
                         
                         response = None
                         for attempt in range(3):
                             try:
-                                response = requests.get(image_result, timeout=60)
+                                response = await asyncio.to_thread(
+                                    curl_requests.get,
+                                    image_result,
+                                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+                                    impersonate="chrome120",
+                                    timeout=60
+                                )
                                 if response.status_code == 200:
                                     break
                                 elif response.status_code in (402, 429):
@@ -821,7 +827,8 @@ async def getChatGPT(update_message, context, title, robot, message, chatid, mes
                         headers = {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
                         }
-                        response = requests.get(fallback_url, headers=headers, timeout=20)
+                        from curl_cffi import requests as curl_requests
+                        response = curl_requests.get(fallback_url, headers=headers, impersonate="chrome120", timeout=20)
                         if response.status_code == 200:
                             return response.content
                         else:
@@ -2005,7 +2012,14 @@ async def image_command(update, context):
             response = None
             for attempt in range(3):
                 try:
-                    response = requests.get(image_url, timeout=60)
+                    from curl_cffi import requests as curl_requests
+                    response = await asyncio.to_thread(
+                        curl_requests.get,
+                        image_url,
+                        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+                        impersonate="chrome120",
+                        timeout=60
+                    )
                     if response.status_code == 200:
                         break
                     elif response.status_code in (402, 429):
