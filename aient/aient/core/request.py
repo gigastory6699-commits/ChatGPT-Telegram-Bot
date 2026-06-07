@@ -1289,6 +1289,10 @@ async def get_gpt_payload(request, engine, provider, api_key=None):
     if "openrouter.ai" in url:
         headers['HTTP-Referer'] = "https://github.com/yym68686/uni-api"
         headers['X-Title'] = "Uni API"
+    if "agentrouter.org" in url:
+        headers['Originator'] = "codex_cli_rs"
+        headers['User-Agent'] = "codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464"
+        headers['Version'] = "0.101.0"
 
     messages = []
     for msg in request.messages:
@@ -1687,6 +1691,10 @@ async def get_openrouter_payload(request, engine, provider, api_key=None):
     if "openrouter.ai" in url:
         headers['HTTP-Referer'] = "https://github.com/yym68686/uni-api"
         headers['X-Title'] = "Uni API"
+    if "agentrouter.org" in url:
+        headers['Originator'] = "codex_cli_rs"
+        headers['User-Agent'] = "codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464"
+        headers['Version'] = "0.101.0"
 
     messages = []
     for msg in request.messages:
@@ -1959,6 +1967,10 @@ async def get_claude_payload(request, engine, provider, api_key=None):
         "anthropic-beta": anthropic_beta,
     }
     url = provider['base_url']
+    if "agentrouter.org" in url:
+        headers['Originator'] = "codex_cli_rs"
+        headers['User-Agent'] = "codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464"
+        headers['Version'] = "0.101.0"
 
     messages = []
     system_prompt = None

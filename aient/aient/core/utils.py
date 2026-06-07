@@ -231,6 +231,10 @@ async def update_initial_model(provider):
                 headers = {"x-api-key": api, "anthropic-version": "2023-06-01"}
             else:
                 headers = {"Authorization": f"Bearer {api}"}
+            if "agentrouter.org" in api_url:
+                headers["Originator"] = "codex_cli_rs"
+                headers["User-Agent"] = "codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464"
+                headers["Version"] = "0.101.0"
             async with httpx.AsyncClient(**client_config) as client:
                 response = await client.get(
                     endpoint_models_url,
