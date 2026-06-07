@@ -240,7 +240,11 @@ async def update_initial_model(provider):
                     endpoint_models_url,
                     headers=headers,
                 )
-            models = response.json()
+            try:
+                models = response.json()
+            except Exception as e:
+                logger.error(f"Error parsing models JSON from {endpoint_models_url}: {e}. Response text: {response.text[:200]}")
+                return []
             if models.get("error"):
                 logger.error({"error": models.get("error"), "endpoint": endpoint_models_url, "api": api})
                 return []
