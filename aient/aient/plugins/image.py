@@ -74,7 +74,5 @@ def generate_image(text):
     except Exception as e:
         print(f"Image generation failed with error: {e}. Falling back to Pollinations AI.")
         import urllib.parse
-        import random
         encoded_prompt = urllib.parse.quote(text)
-        seed = random.randint(1, 1000000)
-        return f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&seed={seed}"
+        return f"https://image.pollinations.ai/prompt/{encoded_prompt}"
