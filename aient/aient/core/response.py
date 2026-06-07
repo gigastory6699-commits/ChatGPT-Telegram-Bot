@@ -274,6 +274,8 @@ async def fetch_gpt_response_stream(client, url, headers, payload, timeout):
                     if result.strip() == "[DONE]":
                         break
                     line = await asyncio.to_thread(json.loads, result)
+                    if not isinstance(line, dict):
+                        continue
                     line['id'] = f"chatcmpl-{random_str}"
 
                     # v1/responses
