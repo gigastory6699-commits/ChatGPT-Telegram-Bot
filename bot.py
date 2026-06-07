@@ -345,6 +345,24 @@ async def command_bot(update, context, title="", has_command=True):
                 image_url = file_url
                 message = await Document_extract(file_url, image_url, engine_type) + message
 
+            send_policy = Users.get_config(convo_id, "send_policy")
+            if send_policy == "off":
+                from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+                lang = get_current_lang(convo_id)
+                btn_text = "🤖 توليد الرد / Generate Response" if lang == "ar" else "🤖 Generate Response"
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton(btn_text, callback_data=f"CLAW_GEN_{messageid}")]
+                ])
+                await context.bot.send_message(
+                    chat_id=chatid,
+                    message_thread_id=message_thread_id,
+                    text=escape("⏳ اضغط على الزر أدناه لتوليد الرد وتجنب استهلاك الرصيد تلقائياً.\nPress the button below to generate the reply.") if lang != "ar" else escape("⏳ اضغط على الزر أدناه لتوليد الرد وتجنب استهلاك الرصيد تلقائياً."),
+                    reply_markup=keyboard,
+                    parse_mode='MarkdownV2',
+                    reply_to_message_id=messageid
+                )
+                return
+
             await getChatGPT(update_message, context, title, robot, message, chatid, messageid, convo_id, message_thread_id, pass_history, api_key, api_url, engine)
     else:
         message = await context.bot.send_message(
@@ -454,17 +472,6 @@ async def getChatGPT(update_message, context, title, robot, message, chatid, mes
         Frequency_Modification = 1
 
 
-    send_policy = Users.get_config(convo_id, "send_policy")
-    if send_policy == "off":
-        try:
-            async for data in robot.ask_stream_async(text, convo_id=convo_id, pass_history=pass_history, model=model_name, language=language, api_url=api_url, api_key=api_key, system_prompt=system_prompt, plugins=plugins):
-                if stop_event.is_set() and convo_id == target_convo_id:
-                    return
-                if "message_search_stage_" not in data:
-                    result = result + data
-        except Exception as e:
-            logger.error(f"Background processing failed: {e}")
-        return
 
     if not await is_bot_blocked(context.bot, chatid):
         answer_messageid = (await context.bot.send_message(
@@ -872,6 +879,44 @@ async def button_press(update, context):
     banner = strings['message_banner'][get_current_lang(convo_id)]
     import telegram
     try:
+        if data.startswith("CLAW_GEN_"):
+            # Generate response on click
+            orig_msg_id = int(data[9:])
+            user_msg = callback_query.message.reply_to_message
+            if not user_msg:
+                await callback_query.answer("⚠️ تعذر العثور على الرسالة الأصلية.")
+                return
+            
+            # Delete the button message
+            try:
+                await callback_query.message.delete()
+            except Exception:
+                pass
+            
+            # Extract info from original user message
+            from utils.scripts import GetMesage
+            message, rawtext, image_url, chatid, messageid, reply_to_message_text, message_thread_id, convo_id, file_url, reply_to_message_file_content, voice_text = await GetMesage(user_msg, context)
+            
+            robot, role, api_key, api_url = get_robot(convo_id)
+            engine = Users.get_config(convo_id, "engine")
+            
+            await getChatGPT(
+                update_message=user_msg,
+                context=context,
+                title=f"`🤖️ {engine}`\n\n" if Users.get_config(convo_id, "TITLE") else "",
+                robot=robot,
+                message=message,
+                chatid=chatid,
+                messageid=messageid,
+                convo_id=convo_id,
+                message_thread_id=message_thread_id,
+                pass_history=Users.get_config(convo_id, "PASS_HISTORY"),
+                api_key=api_key,
+                api_url=api_url,
+                engine=engine
+            )
+            return
+
         if data.startswith("CLAW_"):
             if data == "CLAW_CLOSE":
                 try:
@@ -922,6 +967,14 @@ async def button_press(update, context):
                     new_val = "off" if current == "on" else "on"
                 elif key == "bot_disabled":
                     new_val = not current
+                elif key == "PASS_HISTORY":
+                    try:
+                        curr_val = int(current)
+                    except (ValueError, TypeError):
+                        curr_val = 9999
+                    new_val = 0 if curr_val > 0 else 9999
+                elif key in ["VOICE_REPLY", "IMAGEQA", "LONG_TEXT", "LONG_TEXT_SPLIT", "FILE_UPLOAD_MESS", "FOLLOW_UP", "TITLE", "REPLY"]:
+                    new_val = not current
                 
                 Users.set_config(convo_id, key, new_val)
                 
@@ -932,22 +985,39 @@ async def button_press(update, context):
                     "reasoning_mode": "عرض التفكير",
                     "verbose_mode": "وضع التفصيل",
                     "elevated_mode": "الوضع المرتفع",
-                    "bot_disabled": "حالة البوت"
+                    "bot_disabled": "حالة البوت",
+                    "PASS_HISTORY": "سجل المحادثة",
+                    "VOICE_REPLY": "الرد الصوتي",
+                    "IMAGEQA": "التعرف على الصور",
+                    "LONG_TEXT": "النصوص الطويلة",
+                    "LONG_TEXT_SPLIT": "تقسيم النصوص",
+                    "FILE_UPLOAD_MESS": "رسائل الملفات",
+                    "FOLLOW_UP": "الأسئلة الرديفة",
+                    "TITLE": "عنوان النموذج",
+                    "REPLY": "رد الاقتباس",
                 }.get(key, key)
-                val_ar = {
-                    "always": "دائماً",
-                    "mention": "عند الإشارة",
-                    "on": "تشغيل",
-                    "off": "إيقاف",
-                    "inherit": "وراثة",
-                    "minimal": "أدنى",
-                    "low": "منخفض",
-                    "medium": "متوسط",
-                    "high": "مرتفع",
-                    "stream": "متدفق",
-                    True: "متوقف مؤقتاً",
-                    False: "نشط"
-                }.get(new_val, str(new_val))
+                
+                if key == "PASS_HISTORY":
+                    val_ar = "معطّل" if new_val == 0 else f"نشط ({new_val})"
+                elif key == "REPLY":
+                    val_ar = "مقتبس" if new_val else "بدون اقتباس"
+                elif key == "bot_disabled":
+                    val_ar = "متوقف مؤقتاً" if new_val else "نشط"
+                else:
+                    val_ar = {
+                        "always": "دائماً",
+                        "mention": "عند الإشارة",
+                        "on": "تشغيل",
+                        "off": "إيقاف",
+                        "inherit": "وراثة",
+                        "minimal": "أدنى",
+                        "low": "منخفض",
+                        "medium": "متوسط",
+                        "high": "مرتفع",
+                        "stream": "متدفق",
+                        True: "مفعّل",
+                        False: "معطّل"
+                    }.get(new_val, str(new_val))
                 await callback_query.answer(f"✅ تم تحديث {key_ar} إلى: {val_ar}", show_alert=False)
                 
             elif data == "CLAW_ACTION_compact":
@@ -1418,6 +1488,17 @@ def get_status_keyboard_and_text(convo_id):
     bot_disabled = Users.get_config(convo_id, "bot_disabled")
     engine = Users.get_config(convo_id, "engine")
     
+    # New preferences
+    imageqa = Users.get_config(convo_id, "IMAGEQA")
+    long_text = Users.get_config(convo_id, "LONG_TEXT")
+    long_text_split = Users.get_config(convo_id, "LONG_TEXT_SPLIT")
+    file_upload_mess = Users.get_config(convo_id, "FILE_UPLOAD_MESS")
+    follow_up = Users.get_config(convo_id, "FOLLOW_UP")
+    title_mode = Users.get_config(convo_id, "TITLE")
+    reply_mode = Users.get_config(convo_id, "REPLY")
+    voice_reply = Users.get_config(convo_id, "VOICE_REPLY")
+    pass_history = Users.get_config(convo_id, "PASS_HISTORY")
+    
     act_icon = "🔔" if activation == "mention" else "💬"
     send_icon = "🟢" if send_policy == "on" else ("🔴" if send_policy == "off" else "🟡")
     think_icon = "🧠" if think_level != "off" else "⛔"
@@ -1425,6 +1506,16 @@ def get_status_keyboard_and_text(convo_id):
     verbose_icon = "ℹ️" if verbose_mode == "on" else "🤫"
     elevated_icon = "⚡" if elevated_mode == "on" else "🔒"
     disabled_icon = "⏸️" if bot_disabled else "✅"
+    
+    imageqa_icon = "🟢" if imageqa else "🔴"
+    long_text_icon = "🟢" if long_text else "🔴"
+    long_text_split_icon = "🟢" if long_text_split else "🔴"
+    file_upload_mess_icon = "🟢" if file_upload_mess else "🔴"
+    follow_up_icon = "🟢" if follow_up else "🔴"
+    title_icon = "🟢" if title_mode else "🔴"
+    reply_icon = "🟢" if reply_mode else "🔴"
+    voice_reply_icon = "🟢" if voice_reply else "🔴"
+    pass_history_icon = "🟢" if int(pass_history) > 2 else "🔴"
     
     # Translate options to display user-friendly text
     activation_display = "عند الإشارة (mention)" if activation == "mention" else "دائماً (always)"
@@ -1440,6 +1531,16 @@ def get_status_keyboard_and_text(convo_id):
     verbose_display = "نشط (on)" if verbose_mode == "on" else "معطل (off)"
     elevated_display = "نشط (on)" if elevated_mode == "on" else "معطل (off)"
     
+    imageqa_display = "مفعّل" if imageqa else "معطّل"
+    long_text_display = "مفعّل" if long_text else "معطّل"
+    long_text_split_display = "مفعّل" if long_text_split else "معطّل"
+    file_upload_mess_display = "مفعّل" if file_upload_mess else "معطّل"
+    follow_up_display = "مفعّل" if follow_up else "معطّل"
+    title_display = "مفعّل" if title_mode else "معطّل"
+    reply_display = "مقتبس" if reply_mode else "بدون اقتباس"
+    voice_reply_display = "مفعّل" if voice_reply else "معطّل"
+    pass_history_display = f"نشط ({pass_history})" if int(pass_history) > 2 else "معطّل"
+    
     status_text = (
         "⚙️ **لوحة التحكم وإعدادات ClawdBot** ⚙️\n\n"
         f"🤖 **النموذج النشط:** `{engine}`\n"
@@ -1449,7 +1550,17 @@ def get_status_keyboard_and_text(convo_id):
         f"🧠 **مستوى التفكير:** `{think_display}`\n"
         f"🔍 **وضع التفصيل (Verbose):** `{verbose_display}`\n"
         f"💭 **عرض التفكير:** `{reason_display}`\n"
-        f"⚡ **الوضع المرتفع (Elevated):** `{elevated_display}`\n"
+        f"⚡ **الوضع المرتفع (Elevated):** `{elevated_display}`\n\n"
+        "✨ **الإعدادات الإضافية:**\n"
+        f"📜 **سجل المحادثة (History):** `{pass_history_display}`\n"
+        f"🎙️ **الرد الصوتي (Voice):** `{voice_reply_display}`\n"
+        f"🖼️ **التعرف على الصور (ImageQA):** `{imageqa_display}`\n"
+        f"📄 **النصوص الطويلة (LongText):** `{long_text_display}`\n"
+        f"✂️ **تقسيم النصوص:** `{long_text_split_display}`\n"
+        f"📁 **رسائل الملفات:** `{file_upload_mess_display}`\n"
+        f"❓ **الأسئلة الرديفة:** `{follow_up_display}`\n"
+        f"🏷️ **عنوان النموذج:** `{title_display}`\n"
+        f"💬 **رد الاقتباس:** `{reply_display}`\n"
     )
     
     keyboard = [
@@ -1466,7 +1577,24 @@ def get_status_keyboard_and_text(convo_id):
             InlineKeyboardButton(f"{elevated_icon} المرتفع (elevated)", callback_data="CLAW_TOGGLE_elevated_mode")
         ],
         [
-            InlineKeyboardButton(f"{'▶️ تشغيل البوت' if bot_disabled else '⏸️ إيقاف البوت مؤقتاً'}", callback_data="CLAW_TOGGLE_bot_disabled")
+            InlineKeyboardButton(f"{pass_history_icon} سجل المحادثة", callback_data="CLAW_TOGGLE_PASS_HISTORY"),
+            InlineKeyboardButton(f"{voice_reply_icon} الرد الصوتي", callback_data="CLAW_TOGGLE_VOICE_REPLY")
+        ],
+        [
+            InlineKeyboardButton(f"{imageqa_icon} تحليل الصور", callback_data="CLAW_TOGGLE_IMAGEQA"),
+            InlineKeyboardButton(f"{long_text_icon} نصوص طويلة", callback_data="CLAW_TOGGLE_LONG_TEXT")
+        ],
+        [
+            InlineKeyboardButton(f"{long_text_split_icon} تقسيم النصوص", callback_data="CLAW_TOGGLE_LONG_TEXT_SPLIT"),
+            InlineKeyboardButton(f"{file_upload_mess_icon} رسائل الملفات", callback_data="CLAW_TOGGLE_FILE_UPLOAD_MESS")
+        ],
+        [
+            InlineKeyboardButton(f"{follow_up_icon} أسئلة رديفة", callback_data="CLAW_TOGGLE_FOLLOW_UP"),
+            InlineKeyboardButton(f"{title_icon} عنوان النموذج", callback_data="CLAW_TOGGLE_TITLE")
+        ],
+        [
+            InlineKeyboardButton(f"{reply_icon} رد الاقتباس", callback_data="CLAW_TOGGLE_REPLY"),
+            InlineKeyboardButton(f"{'▶️ تشغيل' if bot_disabled else '⏸️ إيقاف مؤقت'}", callback_data="CLAW_TOGGLE_bot_disabled")
         ],
         [
             InlineKeyboardButton("📦 ضغط الذاكرة (Compact)", callback_data="CLAW_ACTION_compact"),
