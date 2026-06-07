@@ -235,11 +235,19 @@ async def update_initial_model(provider):
                 headers["Originator"] = "codex_cli_rs"
                 headers["User-Agent"] = "codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464"
                 headers["Version"] = "0.101.0"
-            async with httpx.AsyncClient(**client_config) as client:
-                response = await client.get(
+                from curl_cffi import requests as curl_requests
+                response = await asyncio.to_thread(
+                    curl_requests.get,
                     endpoint_models_url,
                     headers=headers,
+                    impersonate="chrome120"
                 )
+            else:
+                async with httpx.AsyncClient(**client_config) as client:
+                    response = await client.get(
+                        endpoint_models_url,
+                        headers=headers,
+                    )
             try:
                 models = response.json()
             except Exception as e:

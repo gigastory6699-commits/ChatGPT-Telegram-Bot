@@ -19,8 +19,13 @@ from .utils import (
 
 async def check_response(response, error_log):
     if response and not (200 <= response.status_code < 300):
-        error_message = await response.aread()
-        error_str = error_message.decode('utf-8', errors='replace')
+        if hasattr(response, "aread"):
+            error_message = await response.aread()
+            error_str = error_message.decode('utf-8', errors='replace')
+        else:
+            error_str = getattr(response, "text", "")
+            if not error_str and hasattr(response, "content"):
+                error_str = response.content.decode('utf-8', errors='replace')
         try:
             error_json = await asyncio.to_thread(json.loads, error_str)
         except json.JSONDecodeError:
@@ -250,21 +255,15 @@ async def fetch_gpt_response_stream(client, url, headers, payload, timeout):
     has_send_thinking = False
     ark_tag = False
     json_payload = await asyncio.to_thread(json.dumps, payload)
-    async with client.stream('POST', url, headers=headers, content=json_payload, timeout=timeout) as response:
-        logger.info(f"fetch_gpt_response_stream response status: {response.status_code}, headers: {dict(response.headers)}")
-        error_message = await check_response(response, "fetch_gpt_response_stream")
-        if error_message:
-            logger.info(f"fetch_gpt_response_stream got error_message: {error_message}")
-            yield error_message
-            return
 
+    async def parse_chunks(chunk_source):
+        nonlocal is_thinking, has_send_thinking, ark_tag
         buffer = ""
         enter_buffer = ""
-
         input_tokens = 0
         output_tokens = 0
 
-        async for chunk in response.aiter_text():
+        async for chunk in chunk_source:
             logger.info(f"fetch_gpt_response_stream chunk received: {repr(chunk)}")
             buffer += chunk
             while "\n" in buffer:
@@ -362,7 +361,6 @@ async def fetch_gpt_response_stream(client, url, headers, payload, timeout):
                         continue
                     azure_databricks_claude_summary_content = safe_get(line, "choices", 0, "delta", "content", 0, "summary", 0, "text", default="")
                     azure_databricks_claude_signature_content = safe_get(line, "choices", 0, "delta", "content", 0, "summary", 0, "signature", default="")
-                    # print("openrouter_reasoning", repr(openrouter_reasoning), openrouter_reasoning.endswith("\\\\"), openrouter_reasoning.endswith("\\"))
                     if azure_databricks_claude_signature_content:
                         pass
                     elif azure_databricks_claude_summary_content:
@@ -397,11 +395,40 @@ async def fetch_gpt_response_stream(client, url, headers, payload, timeout):
                         json_line = await asyncio.to_thread(json.dumps, line)
                         yield "data: " + json_line.strip() + end_of_line
 
-    if input_tokens and output_tokens:
-        sse_string = await generate_sse_response(timestamp, payload["model"], None, None, None, None, None, total_tokens=input_tokens + output_tokens, prompt_tokens=input_tokens, completion_tokens=output_tokens)
-        yield sse_string
+        if input_tokens and output_tokens:
+            sse_string = await generate_sse_response(timestamp, payload["model"], None, None, None, None, None, total_tokens=input_tokens + output_tokens, prompt_tokens=input_tokens, completion_tokens=output_tokens)
+            yield sse_string
 
-    yield "data: [DONE]" + end_of_line
+        yield "data: [DONE]" + end_of_line
+
+    if "agentrouter.org" in url:
+        from curl_cffi.requests import AsyncSession
+        async with AsyncSession() as session:
+            response = await session.post(url, headers=headers, json=payload, impersonate="chrome120", stream=True, timeout=timeout)
+            logger.info(f"fetch_gpt_response_stream (curl_cffi) response status: {response.status_code}, headers: {dict(response.headers)}")
+            error_message = await check_response(response, "fetch_gpt_response_stream")
+            if error_message:
+                logger.info(f"fetch_gpt_response_stream (curl_cffi) got error_message: {error_message}")
+                yield error_message
+                return
+
+            async def curl_chunk_generator():
+                async for chunk_bytes in response.aiter_content():
+                    yield chunk_bytes.decode("utf-8", errors="ignore")
+
+            async for item in parse_chunks(curl_chunk_generator()):
+                yield item
+    else:
+        async with client.stream('POST', url, headers=headers, content=json_payload, timeout=timeout) as response:
+            logger.info(f"fetch_gpt_response_stream response status: {response.status_code}, headers: {dict(response.headers)}")
+            error_message = await check_response(response, "fetch_gpt_response_stream")
+            if error_message:
+                logger.info(f"fetch_gpt_response_stream got error_message: {error_message}")
+                yield error_message
+                return
+
+            async for item in parse_chunks(response.aiter_text()):
+                yield item
 
 async def fetch_azure_response_stream(client, url, headers, payload, timeout):
     timestamp = int(datetime.timestamp(datetime.now()))
