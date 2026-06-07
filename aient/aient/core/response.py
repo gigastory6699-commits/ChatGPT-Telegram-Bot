@@ -251,8 +251,10 @@ async def fetch_gpt_response_stream(client, url, headers, payload, timeout):
     ark_tag = False
     json_payload = await asyncio.to_thread(json.dumps, payload)
     async with client.stream('POST', url, headers=headers, content=json_payload, timeout=timeout) as response:
+        logger.info(f"fetch_gpt_response_stream response status: {response.status_code}, headers: {dict(response.headers)}")
         error_message = await check_response(response, "fetch_gpt_response_stream")
         if error_message:
+            logger.info(f"fetch_gpt_response_stream got error_message: {error_message}")
             yield error_message
             return
 
@@ -263,6 +265,7 @@ async def fetch_gpt_response_stream(client, url, headers, payload, timeout):
         output_tokens = 0
 
         async for chunk in response.aiter_text():
+            logger.info(f"fetch_gpt_response_stream chunk received: {repr(chunk)}")
             buffer += chunk
             while "\n" in buffer:
                 line, buffer = buffer.split("\n", 1)
