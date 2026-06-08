@@ -183,6 +183,25 @@ async def command_bot(update, context, title="", has_command=True):
     stop_event.clear()
     message, rawtext, image_url, chatid, messageid, reply_to_message_text, update_message, message_thread_id, convo_id, file_url, reply_to_message_file_content, voice_text = await GetMesageInfo(update, context)
 
+    # Intercept pending image model prompt input
+    pending_model_id = context.user_data.get('pending_image_model')
+    if pending_model_id and (message or voice_text or rawtext):
+        prompt_text = message or voice_text or rawtext
+        context.user_data.pop('pending_image_model', None)
+        model_names = {
+            "mj_imagine": "Midjourney",
+            "dall-e-3": "DALL-E 3",
+            "flux-1.1-pro": "Flux",
+            "ideogram": "Ideogram",
+            "doubao-seedream-5-0-260128": "豆包绘画",
+            "fal-ai": "fal.ai",
+            "veo3.1-pro": "Nano Banana",
+            "viduq2": "Vidu 生图"
+        }
+        model_display_name = model_names.get(pending_model_id, pending_model_id)
+        await generate_and_send_image(update, context, prompt_text, pending_model_id, model_display_name)
+        return
+
     if not has_command and Users.get_config(convo_id, "bot_disabled"):
         return
 
@@ -886,6 +905,40 @@ async def button_press(update, context):
     banner = strings['message_banner'][get_current_lang(convo_id)]
     import telegram
     try:
+        if data.startswith("CLAW_IMG_"):
+            model_id = data[9:]
+            model_names = {
+                "mj_imagine": "Midjourney",
+                "dall-e-3": "DALL-E 3",
+                "flux-1.1-pro": "Flux",
+                "ideogram": "Ideogram",
+                "doubao-seedream-5-0-260128": "豆包绘画",
+                "fal-ai": "fal.ai",
+                "veo3.1-pro": "Nano Banana",
+                "viduq2": "Vidu 生图"
+            }
+            model_display_name = model_names.get(model_id, model_id)
+            
+            prompt = context.user_data.get('pending_image_prompt')
+            if prompt:
+                # Clear pending prompt
+                context.user_data.pop('pending_image_prompt', None)
+                
+                # Delete the model selection message
+                try:
+                    await callback_query.message.delete()
+                except Exception:
+                    pass
+                
+                await generate_and_send_image(update, context, prompt, model_id, model_display_name)
+            else:
+                context.user_data['pending_image_model'] = model_id
+                await callback_query.edit_message_text(
+                    text=escape(f"لقد اخترت نموذج *{model_display_name}* 🎨\n\nيرجى كتابة وإرسال وصف الصورة التي ترغب في توليدها الآن:"),
+                    parse_mode='MarkdownV2'
+                )
+            return
+
         if data.startswith("CLAW_GEN_"):
             # Generate response on click
             orig_msg_id = int(data[9:])
@@ -1971,29 +2024,25 @@ async def persona_command(update, context):
         reply_to_message_id=user_message_id
     )
 
-@decorators.GroupAuthorization
-@decorators.Authorization
-async def image_command(update, context):
-    """Command to generate an image directly"""
-    _, _, _, chatid, user_message_id, _, _, message_thread_id, convo_id, _, _, _ = await GetMesageInfo(update, context)
+async def generate_and_send_image(update, context, prompt, model_id, model_display_name):
+    # Determine chat and message ids
+    if update.callback_query:
+        chatid = update.callback_query.message.chat_id
+        message_thread_id = update.callback_query.message.message_thread_id
+        user_message_id = update.callback_query.message.reply_to_message.message_id if update.callback_query.message.reply_to_message else update.callback_query.message.message_id
+    else:
+        chatid = update.effective_chat.id
+        message_thread_id = update.effective_message.message_thread_id
+        user_message_id = update.effective_message.message_id
+
+    convo_id = str(chatid)
     lang = get_current_lang(convo_id)
-    if not context.args:
-        await context.bot.send_message(
-            chat_id=chatid,
-            message_thread_id=message_thread_id,
-            text=escape("الرجاء كتابة وصف الصورة بعد الأمر، مثال:\n`/image قطة لطيفة تجري في الحديقة`"),
-            parse_mode='MarkdownV2',
-            reply_to_message_id=user_message_id,
-        )
-        return
-
-    prompt = ' '.join(context.args)
-
+    
     # Send a thinking message
     thinking_message = await context.bot.send_message(
         chat_id=chatid,
         message_thread_id=message_thread_id,
-        text=escape(strings['message_think'][lang]),
+        text=escape(f"🎨 جاري توليد صورتك باستخدام *{model_display_name}*... يرجى الانتظار."),
         parse_mode='MarkdownV2',
         reply_to_message_id=user_message_id,
     )
@@ -2002,7 +2051,7 @@ async def image_command(update, context):
         from aient.aient.plugins.image import generate_image
         import asyncio
         loop = asyncio.get_running_loop()
-        image_url = await loop.run_in_executor(None, generate_image, prompt)
+        image_url = await loop.run_in_executor(None, generate_image, prompt, model_id)
 
         if image_url and image_url.startswith(('http://', 'https://', 'data:')):
             import io
@@ -2057,10 +2106,78 @@ async def image_command(update, context):
             reply_to_message_id=user_message_id,
         )
     finally:
+        # Delete thinking message
         try:
             await context.bot.delete_message(chat_id=chatid, message_id=thinking_message.message_id)
         except Exception:
             pass
+
+@decorators.GroupAuthorization
+@decorators.Authorization
+async def image_command(update, context):
+    """Command to generate an image directly"""
+    _, _, _, chatid, user_message_id, _, _, message_thread_id, convo_id, _, _, _ = await GetMesageInfo(update, context)
+    lang = get_current_lang(convo_id)
+    
+    prompt = ' '.join(context.args) if context.args else ""
+    if prompt:
+        # Save prompt to user data
+        context.user_data['pending_image_prompt'] = prompt
+    else:
+        context.user_data.pop('pending_image_prompt', None)
+        
+    # Build the inline keyboard for image model selection
+    keyboard = [
+        [
+            InlineKeyboardButton("Midjourney 🎨", callback_data="CLAW_IMG_mj_imagine"),
+            InlineKeyboardButton("DALL-E 3 🤖", callback_data="CLAW_IMG_dall-e-3")
+        ],
+        [
+            InlineKeyboardButton("Flux ⚡", callback_data="CLAW_IMG_flux-1.1-pro"),
+            InlineKeyboardButton("Ideogram 📝", callback_data="CLAW_IMG_ideogram")
+        ],
+        [
+            InlineKeyboardButton("豆包绘画 🇨🇳", callback_data="CLAW_IMG_doubao-seedream-5-0-260128"),
+            InlineKeyboardButton("fal.ai ☁️", callback_data="CLAW_IMG_fal-ai")
+        ],
+        [
+            InlineKeyboardButton("Nano Banana 🍌", callback_data="CLAW_IMG_veo3.1-pro"),
+            InlineKeyboardButton("Vidu 生图 🖼️", callback_data="CLAW_IMG_viduq2")
+        ],
+        [
+            InlineKeyboardButton("❌ إلغاء / Cancel", callback_data="CLAW_CLOSE")
+        ]
+    ]
+    
+    menu_text = (
+        "🎨 **يرجى اختيار نموذج توليد الصور (Choose Image Model):**\n\n"
+        "1️⃣ **Midjourney**\n"
+        "🔥 الأكثر شعبية، مميز في الفن الإبداعي والمفاهيمي\n\n"
+        "2️⃣ **DALL-E 3**\n"
+        "🤖 من OpenAI، ذكي جداً في التفاصيل ومطابقة الوصف\n\n"
+        "3️⃣ **Flux**\n"
+        "⚡ نموذج مفتوح بجودة خارقة تضاهي المنتجات المدفوعة\n\n"
+        "4️⃣ **Ideogram**\n"
+        "📝 مذهل في كتابة النصوص وتصميم الشعارات (Logo)\n\n"
+        "5️⃣ **豆包绘画 (Doubao)**\n"
+        "🇨🇳 من ByteDance، ذكي وسريع في فهم السياق واللغات\n\n"
+        "6️⃣ **fal.ai**\n"
+        "☁️ منصة سحابية تضم نماذج رسم متنوعة وقوية\n\n"
+        "7️⃣ **Nano Banana系列**\n"
+        "🍌 من Google، أحدث موديلات جوجل لإنشاء صور بأبعاد متنوعة\n\n"
+        "8️⃣ **Vidu 生图**\n"
+        "🖼️ يعتمد على صور مرجعية متعددة لنتائج دقيقة ومترابطة\n\n"
+        "💡 *إذا لم تكتب وصفاً بعد الأمر، سيطلب منك البوت كتابته بعد اختيار النموذج.*"
+    )
+    
+    await context.bot.send_message(
+        chat_id=chatid,
+        message_thread_id=message_thread_id,
+        text=escape(menu_text),
+        parse_mode='MarkdownV2',
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        reply_to_message_id=user_message_id
+    )
 
 async def scheduled_function(context: ContextTypes.DEFAULT_TYPE) -> None:
     """这个函数将在RESET_TIME秒后执行一次，重置特定用户的对话"""
@@ -2215,6 +2332,7 @@ async def post_init(application: Application) -> None:
         BotCommand('start', 'Start the bot'),
         BotCommand('model', 'Change AI model'),
         BotCommand('image', 'Generate an image'),
+        BotCommand('imag', 'Generate an image (alias for /image)'),
         BotCommand('draw', 'Generate an image (alias for /image)'),
         BotCommand('persona', 'Change AI Persona'),
         BotCommand('help', 'Show help menu for ClawdBot commands'),
@@ -2261,6 +2379,7 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler("reset", reset_chat))
     application.add_handler(CommandHandler("model", change_model))
     application.add_handler(CommandHandler("image", image_command))
+    application.add_handler(CommandHandler("imag", image_command))
     application.add_handler(CommandHandler("draw", image_command))
     application.add_handler(CommandHandler("persona", persona_command))
     application.add_handler(CommandHandler("help", help_command))

@@ -3,8 +3,7 @@ import requests
 import json
 from ..models.base import BaseLLM
 from .registry import register_tool
-
-API = os.environ.get('API', None)
+API = os.environ.get('API', None) or os.environ.get('API_KEY', None)
 BASE_URL = os.environ.get('BASE_URL', None)
 
 class dalle3(BaseLLM):
@@ -57,19 +56,20 @@ class dalle3(BaseLLM):
         yield url
 
 @register_tool()
-def generate_image(text):
+def generate_image(text, model=""):
     """
     生成图像
 
     参数:
         text: 描述图像的文本
+        model: AI图像生成模型名称，例如 'dall-e-3', 'mj_imagine', 'flux-1.1-pro' 等
 
     返回:
         图像的URL
     """
     try:
         dallbot = dalle3(api_key=f"{API}")
-        for data in dallbot.generate(text):
+        for data in dallbot.generate(text, model=model):
             return data
     except Exception as e:
         print(f"Image generation failed with error: {e}. Falling back to Pollinations AI.")
