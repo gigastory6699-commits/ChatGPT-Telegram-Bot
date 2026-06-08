@@ -75,8 +75,7 @@ def generate_image(text, model=""):
         err_str = str(e).lower()
         if "insufficient_quota" in err_str or "quota" in err_str or "403" in err_str or "402" in err_str:
             raise Exception("⚠️ رصيد حسابك (الـ Quota) في Vector Engine غير كافٍ لتوليد الصور باستخدام هذا النموذج. يرجى شحن الحساب أو التأكد من توفر الرصيد.")
-        
-        print(f"Image generation failed with error: {e}. Falling back to Pollinations AI.")
-        import urllib.parse
-        encoded_prompt = urllib.parse.quote(text)
-        return f"https://image.pollinations.ai/prompt/{encoded_prompt}"
+        elif "channel not found" in err_str or "distributor" in err_str or "model_not_found" in err_str or "429" in err_str or "503" in err_str:
+            raise Exception("⚠️ هذا النموذج غير متوفر أو غير مدعوم حالياً على هذا الحساب من قِبل سيرفر Vector Engine.")
+        else:
+            raise Exception(f"فشل توليد الصورة من خادم الرسم: {e}")
