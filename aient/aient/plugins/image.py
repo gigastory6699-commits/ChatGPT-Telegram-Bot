@@ -72,6 +72,10 @@ def generate_image(text, model=""):
         for data in dallbot.generate(text, model=model):
             return data
     except Exception as e:
+        err_str = str(e).lower()
+        if "insufficient_quota" in err_str or "quota" in err_str or "403" in err_str or "402" in err_str:
+            raise Exception("⚠️ رصيد حسابك (الـ Quota) في Vector Engine غير كافٍ لتوليد الصور باستخدام هذا النموذج. يرجى شحن الحساب أو التأكد من توفر الرصيد.")
+        
         print(f"Image generation failed with error: {e}. Falling back to Pollinations AI.")
         import urllib.parse
         encoded_prompt = urllib.parse.quote(text)
