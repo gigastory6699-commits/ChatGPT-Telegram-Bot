@@ -853,10 +853,10 @@ class chatgpt(BaseLLM):
                             raise ModelNotFoundError(f"Model: {model or self.engine} not found!")
                         if "HTTP Error', 'status_code': 401" in processed_chunk or "invalid_api_key" in processed_chunk:
                             raise KeyExhaustedError(processed_chunk)
-                        if "HTTP Error', 'status_code': 403" in processed_chunk:
+                        if "HTTP Error', 'status_code': 403" in processed_chunk or "insufficient_quota" in processed_chunk.lower() or "quota is not enough" in processed_chunk.lower():
                             raise KeyExhaustedError(processed_chunk)
                         if "HTTP Error', 'status_code': 429" in processed_chunk:
-                            if any(phrase in processed_chunk.lower() for phrase in ["quota", "billing", "credit", "exceeded"]):
+                            if any(phrase in processed_chunk.lower() for phrase in ["quota", "billing", "credit", "exceeded", "insufficient"]):
                                 raise KeyExhaustedError(processed_chunk)
                             raise RateLimitError(f"Rate limit exceeded for model: {model or self.engine}")
                         if "HTTP Error', 'status_code': 413" in processed_chunk:
