@@ -18,6 +18,10 @@ from .utils import (
 )
 
 async def check_response(response, error_log):
+    if response:
+        content_type = response.headers.get("content-type", "").lower()
+        if "text/html" in content_type:
+            return {"error": f"{error_log} HTTP Error", "status_code": 403, "details": "Request blocked by WAF (HTML response returned)"}
     if response and not (200 <= response.status_code < 300):
         if hasattr(response, "aread"):
             error_message = await response.aread()
@@ -403,8 +407,12 @@ async def fetch_gpt_response_stream(client, url, headers, payload, timeout):
 
     if "agentrouter.org" in url:
         from curl_cffi.requests import AsyncSession
+        # Make a copy of headers and remove mismatched User-Agent so curl_cffi can set a correct chrome User-Agent
+        session_headers = dict(headers)
+        session_headers.pop("User-Agent", None)
+        session_headers.pop("user-agent", None)
         async with AsyncSession() as session:
-            response = await session.post(url, headers=headers, json=payload, impersonate="chrome120", stream=True, timeout=timeout)
+            response = await session.post(url, headers=session_headers, json=payload, impersonate="chrome120", stream=True, timeout=timeout)
             logger.info(f"fetch_gpt_response_stream (curl_cffi) response status: {response.status_code}, headers: {dict(response.headers)}")
             error_message = await check_response(response, "fetch_gpt_response_stream")
             if error_message:

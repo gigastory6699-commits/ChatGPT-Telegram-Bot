@@ -236,10 +236,11 @@ async def update_initial_model(provider):
                 headers["User-Agent"] = "codex_cli_rs/0.101.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464"
                 headers["Version"] = "0.101.0"
                 from curl_cffi import requests as curl_requests
+                session_headers = {k: v for k, v in headers.items() if k.lower() != "user-agent"}
                 response = await asyncio.to_thread(
                     curl_requests.get,
                     endpoint_models_url,
-                    headers=headers,
+                    headers=session_headers,
                     impersonate="chrome120"
                 )
             else:
