@@ -895,7 +895,7 @@ class chatgpt(BaseLLM):
                 import os, config
                 fallback_key   = os.environ.get("GROQ_API_KEY", "")
                 fallback_url   = os.environ.get("GROQ_BASE_URL", "https://api.groq.com/openai/v1/chat/completions")
-                fallback_model = os.environ.get("GROQ_MODEL", "gpt-oss-120b")
+                fallback_model = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
                 current_key = kwargs.get('api_key') or self.api_key
                 last_exception = e
                 if fallback_key and current_key != fallback_key:
