@@ -798,6 +798,7 @@ class chatgpt(BaseLLM):
         # 发送请求并处理响应
         retry_times = 0
         error_to_raise = None
+        last_exception = None
         while retry_times < self.retry_count:
             retry_times += 1
             tmp_post_json = copy.deepcopy(json_post)
@@ -869,16 +870,26 @@ class chatgpt(BaseLLM):
 
                 # 成功处理，跳出重试循环
                 break
-            except (httpx.ConnectError, httpx.ReadTimeout, httpx.PoolTimeout):
+            except (httpx.ConnectError, httpx.ReadTimeout, httpx.PoolTimeout) as e:
                 self.logger.error("Connection or read timeout.")
+                last_exception = e
                 return # Stop iteration
-            except httpx.RemoteProtocolError:
+            except httpx.RemoteProtocolError as e:
+                last_exception = e
+                if retry_times < self.retry_count:
+                    await asyncio.sleep(2)
                 continue
             except httpx.ReadError as e:
                 self.logger.warning(f"{e}, retrying...")
+                last_exception = e
+                if retry_times < self.retry_count:
+                    await asyncio.sleep(2)
                 continue
-            except APITimeoutError:
+            except APITimeoutError as e:
                 self.logger.warning("API response timeout (524), retrying...")
+                last_exception = e
+                if retry_times < self.retry_count:
+                    await asyncio.sleep(2)
                 continue
             except KeyExhaustedError as e:
                 import os, config
@@ -886,6 +897,7 @@ class chatgpt(BaseLLM):
                 fallback_url   = os.environ.get("GROQ_BASE_URL", "https://api.groq.com/openai/v1/chat/completions")
                 fallback_model = os.environ.get("GROQ_MODEL", "gpt-oss-120b")
                 current_key = kwargs.get('api_key') or self.api_key
+                last_exception = e
                 if fallback_key and current_key != fallback_key:
                     self.logger.warning(f"Key exhausted or unauthorized ({e}). Switching to Groq fallback...")
 
@@ -917,9 +929,15 @@ class chatgpt(BaseLLM):
                     raise
             except HTTPError as e:
                 self.logger.warning(f"{e}, retrying...")
+                last_exception = e
+                if retry_times < self.retry_count:
+                    await asyncio.sleep(2)
                 continue
             except RateLimitError as e:
                 self.logger.warning(f"{e}, retrying...")
+                last_exception = e
+                if retry_times < self.retry_count:
+                    await asyncio.sleep(2)
                 continue
             except InputTokenCountExceededError as e:
                 self.logger.error(f"The request body is too long: {e}")
@@ -933,6 +951,9 @@ class chatgpt(BaseLLM):
                 break
             except ValidationError as e:
                 self.logger.warning(f"Validation failed: {e}. Retrying with corrective prompt.")
+                last_exception = e
+                if retry_times < self.retry_count:
+                    await asyncio.sleep(2)
                 need_done_prompt = [
                     {"role": "assistant", "content": e.response_text},
                     {"role": "user", "content": "你的消息没有以[done]结尾，请重新输出"}
@@ -940,6 +961,9 @@ class chatgpt(BaseLLM):
                 continue
             except AllToolsMissingParametersError as e:
                 self.logger.warning(f"All tools are missing required parameters: {e}. Retrying with corrective prompt.")
+                last_exception = e
+                if retry_times < self.retry_count:
+                    await asyncio.sleep(2)
                 need_done_prompt = [
                     {"role": "assistant", "content": e.response_text},
                     {"role": "user", "content": f"{str(e)}，请重新输出"}
@@ -947,9 +971,15 @@ class chatgpt(BaseLLM):
                 continue
             except EmptyResponseError as e:
                 self.logger.warning(f"{e}, retrying...")
+                last_exception = e
+                if retry_times < self.retry_count:
+                    await asyncio.sleep(2)
                 continue
             except RepetitiveResponseError as e:
                 self.logger.warning(f"{e}, retrying...")
+                last_exception = e
+                if retry_times < self.retry_count:
+                    await asyncio.sleep(2)
                 continue
             except TaskComplete as e:
                 raise
@@ -962,12 +992,16 @@ class chatgpt(BaseLLM):
                 if "Invalid URL" in str(e):
                     error_message = "您输入了无效的API URL，请使用正确的URL并使用`/start`命令重新设置API URL。具体错误如下：\n\n" + str(e)
                     raise ConfigurationError(error_message)
-                # 最后一次重试失败，向上抛出异常
+                last_exception = e
                 if retry_times == self.retry_count:
                     raise RetryFailedError(str(e))
+                else:
+                    await asyncio.sleep(2)
 
         if error_to_raise:
             raise error_to_raise
+        elif last_exception and retry_times >= self.retry_count:
+            raise RetryFailedError(str(last_exception))
 
     def ask_stream(
         self,
