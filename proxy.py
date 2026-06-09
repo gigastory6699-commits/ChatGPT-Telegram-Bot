@@ -51,22 +51,19 @@ class FakeZeroProxy(BaseHTTPRequestHandler):
             if is_agentrouter:
                 mapped_path = "/domains/models/capabilities/chat-complete/execute"
             else:
-                if "/v1/" not in mapped_path and not CONFIG["real_api_url"].endswith("/v1"):
-                    mapped_path = "/v1" + mapped_path
+                mapped_path = "/v1/chat/completions"
         elif "/images/generations" in path:
             is_image = True
             if is_agentrouter:
                 mapped_path = "/domains/media/capabilities/image-generate/execute"
             else:
-                if "/v1/" not in mapped_path and not CONFIG["real_api_url"].endswith("/v1"):
-                    mapped_path = "/v1" + mapped_path
+                mapped_path = "/v1/images/generations"
         elif "/videos/generations" in path:
             is_video = True
             if is_agentrouter:
                 mapped_path = "/domains/media/capabilities/video-generate/execute"
             else:
-                # تحويل مسار الفيديو على منصات القياسية إلى مسار توليد الصور
-                mapped_path = "/v1/images/generations" if "/v1/" not in path and not CONFIG["real_api_url"].endswith("/v1") else "/images/generations"
+                mapped_path = "/v1/images/generations"
 
         base_url = CONFIG["real_api_url"].rstrip("/")
         if is_agentrouter:
@@ -107,10 +104,10 @@ class FakeZeroProxy(BaseHTTPRequestHandler):
                     }
                     body = json.dumps(ar_payload).encode('utf-8')
                 else:
-                    default_model = "flux-1.1-pro" if is_image else "kling-video"
+                    default_model = "flux-1.1-pro" if is_image else "grok-video-3"
                     model = payload.get("model")
-                    if not is_image and model == "luma-ray":
-                        model = "kling-video"
+                    if not is_image and (model == "luma-ray" or model == "kling-video"):
+                        model = "grok-video-3"
                     payload["model"] = model or default_model
                     body = json.dumps(payload).encode('utf-8')
             except Exception as e:
@@ -179,7 +176,7 @@ class FakeZeroProxy(BaseHTTPRequestHandler):
                     {"id": "gpt-4o-mini", "object": "model", "created": 1686935002, "owned_by": "openai"},
                     {"id": "gpt-4o", "object": "model", "created": 1686935002, "owned_by": "openai"},
                     {"id": "flux-1.1-pro", "object": "model", "created": 1686935002, "owned_by": "openai"},
-                    {"id": "kling-video", "object": "model", "created": 1686935002, "owned_by": "openai"}
+                    {"id": "grok-video-3", "object": "model", "created": 1686935002, "owned_by": "openai"}
                 ]
             }
             self._send_response(mock_models, 200)
