@@ -2179,6 +2179,117 @@ async def image_command(update, context):
         reply_to_message_id=user_message_id
     )
 
+@decorators.GroupAuthorization
+@decorators.Authorization
+async def video_command(update, context):
+    """Command to generate a video directly"""
+    _, _, _, chatid, user_message_id, _, _, message_thread_id, convo_id, _, _, _ = await GetMesageInfo(update, context)
+    
+    prompt = ' '.join(context.args) if context.args else ""
+    if not prompt:
+        await context.bot.send_message(
+            chat_id=chatid,
+            message_thread_id=message_thread_id,
+            text=escape("⚠️ يرجى كتابة وصف الفيديو بعد الأمر.\nمثال: `/video a cat running`"),
+            parse_mode='MarkdownV2',
+            reply_to_message_id=user_message_id,
+        )
+        return
+        
+    thinking_message = await context.bot.send_message(
+        chat_id=chatid,
+        message_thread_id=message_thread_id,
+        text=escape("🎬 جاري توليد الفيديو باستخدام *Luma Ray*... يرجى الانتظار."),
+        parse_mode='MarkdownV2',
+        reply_to_message_id=user_message_id,
+    )
+    
+    try:
+        import io
+        import httpx
+        import asyncio
+        from curl_cffi import requests as curl_requests
+        
+        robot, role, api_key, api_url = get_robot(convo_id)
+        
+        # We need to compute the video endpoint URL by transforming the base api_url
+        parsed_url = api_url.rstrip("/")
+        if parsed_url.endswith("chat/completions"):
+            video_endpoint = parsed_url.replace("chat/completions", "videos/generations")
+        else:
+            if "/v1" in parsed_url:
+                base = parsed_url.split("/v1")[0]
+                video_endpoint = f"{base}/v1/videos/generations"
+            else:
+                video_endpoint = f"{parsed_url}/videos/generations"
+                
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "prompt": prompt,
+            "model": "luma-ray"
+        }
+        
+        logger.info(f"Calling video generation endpoint: {video_endpoint}")
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(video_endpoint, headers=headers, json=payload)
+            if resp.status_code != 200:
+                raise Exception(f"HTTP {resp.status_code}: {resp.text}")
+            
+            data = resp.json()
+            video_url = data["data"][0]["url"]
+            
+        logger.info(f"Video generated successfully. URL: {video_url}. Downloading...")
+        
+        # Download the video
+        response = None
+        for attempt in range(3):
+            try:
+                response = await asyncio.to_thread(
+                    curl_requests.get,
+                    video_url,
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+                    impersonate="chrome120",
+                    timeout=90
+                )
+                if response.status_code == 200:
+                    break
+                elif response.status_code in (402, 429):
+                    await asyncio.sleep(2)
+            except Exception as e:
+                logger.warning(f"Video download attempt {attempt + 1} failed: {e}")
+                await asyncio.sleep(2)
+                
+        if response and response.status_code == 200:
+            video_file = io.BytesIO(response.content)
+            video_file.name = "video.mp4"
+            await context.bot.send_video(
+                chat_id=chatid,
+                video=video_file,
+                reply_to_message_id=user_message_id,
+                message_thread_id=message_thread_id
+            )
+        else:
+            status = response.status_code if response else 'No Response'
+            raise Exception(f"Failed to download video file after retries (HTTP status {status})")
+            
+    except Exception as e:
+        logger.error(f"Video generation failed: {e}")
+        await context.bot.send_message(
+            chat_id=chatid,
+            message_thread_id=message_thread_id,
+            text=escape(f"❌ فشل توليد الفيديو: {e}"),
+            parse_mode='MarkdownV2',
+            reply_to_message_id=user_message_id,
+        )
+    finally:
+        try:
+            await context.bot.delete_message(chat_id=chatid, message_id=thinking_message.message_id)
+        except Exception:
+            pass
+
 async def scheduled_function(context: ContextTypes.DEFAULT_TYPE) -> None:
     """这个函数将在RESET_TIME秒后执行一次，重置特定用户的对话"""
     job = context.job
@@ -2275,7 +2386,7 @@ async def start(update, context): # 当用户输入/start时，返回文本
     message = (
         f"Hi `{user.username}` ! I am an Assistant, a large language model trained by OpenAI. I will do my best to help answer your questions.\n\n"
     )
-    if len(context.args) == 2 and context.args[1].startswith("sk-"):
+    if len(context.args) == 2 and (context.args[1].startswith("sk-") or context.args[1].startswith("aak_")):
         api_url = context.args[0]
         api_key = context.args[1]
         Users.set_config(convo_id, "api_key", api_key)
@@ -2283,7 +2394,7 @@ async def start(update, context): # 当用户输入/start时，返回文本
         # if GET_MODELS:
         #     update_initial_model()
 
-    if len(context.args) == 1 and context.args[0].startswith("sk-"):
+    if len(context.args) == 1 and (context.args[0].startswith("sk-") or context.args[0].startswith("aak_")):
         api_key = context.args[0]
         Users.set_config(convo_id, "api_key", api_key)
         Users.set_config(convo_id, "api_url", "https://api.openai.com/v1/chat/completions")
@@ -2334,6 +2445,8 @@ async def post_init(application: Application) -> None:
         BotCommand('image', 'Generate an image'),
         BotCommand('imag', 'Generate an image (alias for /image)'),
         BotCommand('draw', 'Generate an image (alias for /image)'),
+        BotCommand('video', 'Generate a video'),
+        BotCommand('vid', 'Generate a video (alias for /video)'),
         BotCommand('persona', 'Change AI Persona'),
         BotCommand('help', 'Show help menu for ClawdBot commands'),
         BotCommand('status', 'Show active ClawdBot configurations'),
@@ -2381,6 +2494,9 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler("image", image_command))
     application.add_handler(CommandHandler("imag", image_command))
     application.add_handler(CommandHandler("draw", image_command))
+    application.add_handler(CommandHandler("video", video_command))
+    application.add_handler(CommandHandler("vid", video_command))
+    application.add_handler(CommandHandler("draw_video", video_command))
     application.add_handler(CommandHandler("persona", persona_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("status", status_command))
