@@ -10,6 +10,24 @@ if sys.platform.startswith('win'):
     sys.stdout.reconfigure(encoding='utf-8', errors='backslashreplace')
     sys.stderr.reconfigure(encoding='utf-8', errors='backslashreplace')
 
+def load_env_file():
+    """تحميل متغيرات البيئة من ملف .env يدوياً"""
+    if os.path.exists(".env"):
+        try:
+            with open(".env", "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.strip().split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip('"').strip("'")
+                        if k and k not in os.environ:
+                            os.environ[k] = v
+        except Exception as e:
+            print(f"Error loading .env file: {e}")
+
+load_env_file()
+
 # ═══════════════════════════════════════════════════════════════════
 # الإعدادات
 # ═══════════════════════════════════════════════════════════════════
@@ -41,13 +59,14 @@ class FakeZeroProxy(BaseHTTPRequestHandler):
     def _forward_request(self, method, path):
         # التحقق مما إذا كان العنوان المستهدف هو AgentRouter أو منصة قياسية مثل Vector Engine
         is_agentrouter = "agentrouter.to" in CONFIG["real_api_url"]
+        is_chat = "/chat/completions" in path
         
         mapped_path = path
         is_image = False
         is_video = False
         is_stream = False
         
-        if "/chat/completions" in path:
+        if is_chat:
             if is_agentrouter:
                 mapped_path = "/domains/models/capabilities/chat-complete/execute"
             else:
@@ -65,26 +84,35 @@ class FakeZeroProxy(BaseHTTPRequestHandler):
             else:
                 mapped_path = "/v1/images/generations"
 
-        base_url = CONFIG["real_api_url"].rstrip("/")
-        if is_agentrouter:
-            dest_url = base_url + mapped_path
+        # تحديد العنوان الفعلي بناءً على نوع الطلب
+        if is_chat:
+            # توجيه طلبات المحادثة بالكامل لـ Groq لتفادي أي خصم للرصيد
+            dest_url = "https://api.groq.com/openai/v1/chat/completions"
         else:
-            cleaned_path = mapped_path
-            if base_url.endswith("/v1") and cleaned_path.startswith("/v1/"):
-                cleaned_path = cleaned_path[3:] # إزالة تكرار /v1
-            dest_url = base_url + cleaned_path
+            base_url = CONFIG["real_api_url"].rstrip("/")
+            if is_agentrouter:
+                dest_url = base_url + mapped_path
+            else:
+                cleaned_path = mapped_path
+                if base_url.endswith("/v1") and cleaned_path.startswith("/v1/"):
+                    cleaned_path = cleaned_path[3:] # إزالة تكرار /v1
+                dest_url = base_url + cleaned_path
         
         headers = {}
         for key in self.headers:
             if key.lower() not in ["host", "content-length", "accept-encoding", "authorization"]:
                 headers[key] = self.headers[key]
         
-        # استخدام التوكن القادم من البوت، أو التوكن الافتراضي من الإعدادات
-        incoming_auth = self.headers.get("Authorization")
-        if incoming_auth:
-            headers["Authorization"] = incoming_auth
-        elif CONFIG["real_api_key"]:
-            headers["Authorization"] = f"Bearer {CONFIG['real_api_key']}"
+        # تعيين ترويسة المصادقة المناسبة
+        if is_chat:
+            groq_key = os.environ.get("GROQ_API_KEY")
+            headers["Authorization"] = f"Bearer {groq_key}"
+        else:
+            incoming_auth = self.headers.get("Authorization")
+            if incoming_auth:
+                headers["Authorization"] = incoming_auth
+            elif CONFIG["real_api_key"]:
+                headers["Authorization"] = f"Bearer {CONFIG['real_api_key']}"
             
         content_length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(content_length) if content_length > 0 else None
@@ -114,13 +142,17 @@ class FakeZeroProxy(BaseHTTPRequestHandler):
                 print(f"Error mapping media payload: {e}")
         
         # للدردشة، تحقق من رغبة العميل بالبث المباشر (stream) وقم بإيقافه عند الاتصال بالسيرفر
-        if "/chat/completions" in path and body:
+        if is_chat and body:
             try:
                 payload = json.loads(body.decode('utf-8'))
+                
+                # تعيين أقوى نموذج شات من Groq
+                payload["model"] = "llama-3.3-70b-versatile"
+                
                 if payload.get("stream") is True:
                     is_stream = True
                     payload["stream"] = False
-                    body = json.dumps(payload).encode('utf-8')
+                body = json.dumps(payload).encode('utf-8')
             except Exception as e:
                 print(f"Error reading/modifying stream flag: {e}")
 
