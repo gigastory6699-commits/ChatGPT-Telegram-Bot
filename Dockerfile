@@ -10,4 +10,5 @@ WORKDIR /home
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY . .
 
-ENTRYPOINT ["python", "-u", "/home/bot.py"]
+RUN chmod +x start.sh
+ENTRYPOINT ["/bin/sh", "start.sh"]
