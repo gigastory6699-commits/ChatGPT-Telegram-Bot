@@ -36,7 +36,8 @@ CONFIG = {
     "proxy_port": int(os.environ.get("PROXY_PORT", 8090)),
     "real_api_url": os.environ.get("REAL_API_URL", "https://api.vectorengine.ai"),
     "real_api_key": os.environ.get("REAL_API_KEY", "sk-189RC16HMbO4fhp0Fgt0bZmpEGAB4yNZIqbaBMaFHC8BOc2a"),
-    "mode": os.environ.get("PROXY_MODE", "FAKE")
+    "mode": os.environ.get("PROXY_MODE", "FAKE"),
+    "free_image_generation": os.environ.get("FREE_IMAGE_GENERATION", "True") == "True"
 }
 
 def extract_first_url(data):
@@ -233,6 +234,29 @@ class FakeZeroProxy(BaseHTTPRequestHandler):
         path = self.path
         print(f"POST {path}")
         
+        # 🎨 توليد صور مجانية بالكامل عبر Pollinations.ai لتفادي استهلاك الرصيد
+        is_image = "/images/generations" in path
+        if is_image and CONFIG["free_image_generation"]:
+            import urllib.parse
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length) if content_length > 0 else None
+            try:
+                payload = json.loads(body.decode('utf-8'))
+                prompt = payload.get("prompt", "a beautiful scene")
+            except Exception:
+                prompt = "a beautiful scene"
+            
+            encoded_prompt = urllib.parse.quote(prompt)
+            # استخدام نموذج flux المجاني والحديث على pollinations.ai
+            pollinations_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?model=flux&nologo=true&private=true"
+            data = {
+                "created": 1600000000,
+                "data": [{"url": pollinations_url}]
+            }
+            self._send_response(data, 200)
+            print(f"Free Image generated via Pollinations.ai (prompt: {prompt})")
+            return
+            
         resp_tuple = self._forward_request("POST", path)
         
         if resp_tuple and resp_tuple[0] is not None:
