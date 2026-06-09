@@ -16,8 +16,8 @@ if sys.platform.startswith('win'):
 CONFIG = {
     "proxy_host": "0.0.0.0",
     "proxy_port": int(os.environ.get("PROXY_PORT", 8090)),
-    "real_api_url": os.environ.get("REAL_API_URL", "https://api.agentrouter.to/api/agentic-api"),
-    "real_api_key": os.environ.get("REAL_API_KEY", "sk-G8IDqowYc202qQlrBsrvpxL8JOtMlIdp0WdTO1w6zLHyAVqY"),
+    "real_api_url": os.environ.get("REAL_API_URL", "https://api.vectorengine.ai"),
+    "real_api_key": os.environ.get("REAL_API_KEY", "sk-189RC16HMbO4fhp0Fgt0bZmpEGAB4yNZIqbaBMaFHC8BOc2a"),
     "mode": os.environ.get("PROXY_MODE", "FAKE")
 }
 
@@ -39,22 +39,43 @@ def extract_first_url(data):
 
 class FakeZeroProxy(BaseHTTPRequestHandler):
     def _forward_request(self, method, path):
-        # تحويل المسارات لتتوافق مع هيكلية AgentRouter Capability-based API
+        # التحقق مما إذا كان العنوان المستهدف هو AgentRouter أو منصة قياسية مثل Vector Engine
+        is_agentrouter = "agentrouter.to" in CONFIG["real_api_url"]
+        
         mapped_path = path
         is_image = False
         is_video = False
         is_stream = False
         
         if "/chat/completions" in path:
-            mapped_path = "/domains/models/capabilities/chat-complete/execute"
+            if is_agentrouter:
+                mapped_path = "/domains/models/capabilities/chat-complete/execute"
+            else:
+                if "/v1/" not in mapped_path and not CONFIG["real_api_url"].endswith("/v1"):
+                    mapped_path = "/v1" + mapped_path
         elif "/images/generations" in path:
-            mapped_path = "/domains/media/capabilities/image-generate/execute"
             is_image = True
+            if is_agentrouter:
+                mapped_path = "/domains/media/capabilities/image-generate/execute"
+            else:
+                if "/v1/" not in mapped_path and not CONFIG["real_api_url"].endswith("/v1"):
+                    mapped_path = "/v1" + mapped_path
         elif "/videos/generations" in path:
-            mapped_path = "/domains/media/capabilities/video-generate/execute"
             is_video = True
+            if is_agentrouter:
+                mapped_path = "/domains/media/capabilities/video-generate/execute"
+            else:
+                # تحويل مسار الفيديو على منصات القياسية إلى مسار توليد الصور
+                mapped_path = "/v1/images/generations" if "/v1/" not in path and not CONFIG["real_api_url"].endswith("/v1") else "/images/generations"
 
-        dest_url = CONFIG["real_api_url"].rstrip("/") + mapped_path
+        base_url = CONFIG["real_api_url"].rstrip("/")
+        if is_agentrouter:
+            dest_url = base_url + mapped_path
+        else:
+            cleaned_path = mapped_path
+            if base_url.endswith("/v1") and cleaned_path.startswith("/v1/"):
+                cleaned_path = cleaned_path[3:] # إزالة تكرار /v1
+            dest_url = base_url + cleaned_path
         
         headers = {}
         for key in self.headers:
@@ -71,20 +92,31 @@ class FakeZeroProxy(BaseHTTPRequestHandler):
         content_length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(content_length) if content_length > 0 else None
         
-        # تهيئة مدخلات رسم الصور أو توليد الفيديو لتناسب AgentRouter
+        # تهيئة مدخلات رسم الصور أو توليد الفيديو
         if (is_image or is_video) and body:
             try:
                 payload = json.loads(body.decode('utf-8'))
-                default_model = "flux-1.1-pro" if is_image else "luma-ray"
-                ar_payload = {
-                    "prompt": payload.get("prompt", ""),
-                    "model": payload.get("model") or default_model
-                }
-                body = json.dumps(ar_payload).encode('utf-8')
+                if is_agentrouter:
+                    default_model = "flux-1.1-pro" if is_image else "luma-ray"
+                    model = payload.get("model")
+                    if not is_image and model == "kling-video":
+                        model = "luma-ray"
+                    ar_payload = {
+                        "prompt": payload.get("prompt", ""),
+                        "model": model or default_model
+                    }
+                    body = json.dumps(ar_payload).encode('utf-8')
+                else:
+                    default_model = "flux-1.1-pro" if is_image else "kling-video"
+                    model = payload.get("model")
+                    if not is_image and model == "luma-ray":
+                        model = "kling-video"
+                    payload["model"] = model or default_model
+                    body = json.dumps(payload).encode('utf-8')
             except Exception as e:
                 print(f"Error mapping media payload: {e}")
         
-        # للدردشة، تحقق من رغبة العميل بالبث المباشر (stream) وقم بإيقافه عند الاتصال بـ AgentRouter
+        # للدردشة، تحقق من رغبة العميل بالبث المباشر (stream) وقم بإيقافه عند الاتصال بالسيرفر
         if "/chat/completions" in path and body:
             try:
                 payload = json.loads(body.decode('utf-8'))
@@ -147,7 +179,7 @@ class FakeZeroProxy(BaseHTTPRequestHandler):
                     {"id": "gpt-4o-mini", "object": "model", "created": 1686935002, "owned_by": "openai"},
                     {"id": "gpt-4o", "object": "model", "created": 1686935002, "owned_by": "openai"},
                     {"id": "flux-1.1-pro", "object": "model", "created": 1686935002, "owned_by": "openai"},
-                    {"id": "luma-ray", "object": "model", "created": 1686935002, "owned_by": "openai"}
+                    {"id": "kling-video", "object": "model", "created": 1686935002, "owned_by": "openai"}
                 ]
             }
             self._send_response(mock_models, 200)

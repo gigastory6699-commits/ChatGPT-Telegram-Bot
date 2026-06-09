@@ -2199,7 +2199,7 @@ async def video_command(update, context):
     thinking_message = await context.bot.send_message(
         chat_id=chatid,
         message_thread_id=message_thread_id,
-        text=escape("🎬 جاري توليد الفيديو باستخدام *Luma Ray*... يرجى الانتظار."),
+        text=escape("🎬 جاري توليد الفيديو باستخدام *Kling Video*... يرجى الانتظار."),
         parse_mode='MarkdownV2',
         reply_to_message_id=user_message_id,
     )
@@ -2229,7 +2229,7 @@ async def video_command(update, context):
         }
         payload = {
             "prompt": prompt,
-            "model": "luma-ray"
+            "model": "kling-video"
         }
         
         logger.info(f"Calling video generation endpoint: {video_endpoint}")
