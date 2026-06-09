@@ -234,9 +234,9 @@ class FakeZeroProxy(BaseHTTPRequestHandler):
         path = self.path
         print(f"POST {path}")
         
-        # 🎨 توليد صور مجانية بالكامل عبر Pollinations.ai لتفادي استهلاك الرصيد
+        # 🎨 توليد الصور باستخدام Fal.ai مع الانتقال التلقائي لـ Pollinations.ai في حالة فشل الرصيد
         is_image = "/images/generations" in path
-        if is_image and CONFIG["free_image_generation"]:
+        if is_image:
             import urllib.parse
             content_length = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(content_length) if content_length > 0 else None
@@ -246,15 +246,40 @@ class FakeZeroProxy(BaseHTTPRequestHandler):
             except Exception:
                 prompt = "a beautiful scene"
             
-            encoded_prompt = urllib.parse.quote(prompt)
-            # استخدام نموذج flux المجاني والحديث على pollinations.ai
-            pollinations_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?model=flux&nologo=true&private=true"
+            fal_key = os.environ.get("FAL_API_KEY")
+            image_url = None
+            
+            if fal_key:
+                try:
+                    print(f"Attempting image generation via Fal.ai (prompt: {prompt})...")
+                    fal_url = "https://queue.fal.run/fal-ai/flux/schnell"
+                    headers = {
+                        "Authorization": f"Key {fal_key}",
+                        "Content-Type": "application/json"
+                    }
+                    fal_payload = {"prompt": prompt}
+                    resp = requests.post(fal_url, headers=headers, json=fal_payload, timeout=20)
+                    if resp.status_code == 200:
+                        resp_data = resp.json()
+                        if "images" in resp_data and len(resp_data["images"]) > 0:
+                            image_url = resp_data["images"][0]["url"]
+                            print("Image generated successfully via Fal.ai!")
+                    else:
+                        print(f"Fal.ai failed with status {resp.status_code}: {resp.text[:200]}")
+                except Exception as e:
+                    print(f"Error calling Fal.ai: {e}")
+            
+            # إذا لم يتم التوليد عبر Fal.ai (بسبب انتهاء الرصيد أو عدم التكوين) نقوم بالتحويل لـ Pollinations المجاني
+            if not image_url:
+                print("Falling back to Pollinations.ai for free image generation...")
+                encoded_prompt = urllib.parse.quote(prompt)
+                image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?model=flux&nologo=true&private=true"
+            
             data = {
                 "created": 1600000000,
-                "data": [{"url": pollinations_url}]
+                "data": [{"url": image_url}]
             }
             self._send_response(data, 200)
-            print(f"Free Image generated via Pollinations.ai (prompt: {prompt})")
             return
             
         resp_tuple = self._forward_request("POST", path)
