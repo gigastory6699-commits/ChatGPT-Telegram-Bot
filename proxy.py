@@ -148,7 +148,7 @@ class FakeZeroProxy(BaseHTTPRequestHandler):
                 payload = json.loads(body.decode('utf-8'))
                 
                 # تعيين أقوى نموذج شات من Groq
-                payload["model"] = "llama-3.3-70b-versatile"
+                payload["model"] = "openai/gpt-oss-120b"
                 
                 if payload.get("stream") is True:
                     is_stream = True
