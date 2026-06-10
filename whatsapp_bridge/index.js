@@ -81,6 +81,16 @@ async function initWhatsApp(chatId, pairPhone = null) {
     }
     fs.writeFileSync('session/telegram_chat_id.txt', chatId);
 
+    // Delete any old QR code files to avoid serving stale QRs
+    if (fs.existsSync('session/qr.png')) {
+        try {
+            fs.unlinkSync('session/qr.png');
+        } catch (err) {
+            console.error("Failed to delete old QR code:", err.message);
+        }
+    }
+    qrCode = null;
+
     if (sock && !pairPhone) {
         return null;
     }
@@ -193,6 +203,27 @@ app.post('/send', async (req, res) => {
     try {
         await sock.sendMessage(to, { text: message });
         res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/disconnect', async (req, res) => {
+    try {
+        if (sock) {
+            try {
+                await sock.logout();
+            } catch (logoutErr) {
+                console.error("Logout error (likely already disconnected):", logoutErr.message);
+            }
+            sock = null;
+        }
+        connectionState = 'DISCONNECTED';
+        qrCode = null;
+        if (fs.existsSync('session')) {
+            fs.rmSync('session', { recursive: true, force: true });
+        }
+        res.json({ success: true, message: 'Disconnected and session cleared' });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

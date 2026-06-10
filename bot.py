@@ -183,6 +183,41 @@ async def command_bot(update, context, title="", has_command=True):
     stop_event.clear()
     message, rawtext, image_url, chatid, messageid, reply_to_message_text, update_message, message_thread_id, convo_id, file_url, reply_to_message_file_content, voice_text = await GetMesageInfo(update, context)
 
+    # Check if this is a reply to a WhatsApp message notification
+    if update_message and update_message.reply_to_message:
+        replied_text = update_message.reply_to_message.text or update_message.reply_to_message.caption or ""
+        if "[From: " in replied_text:
+            match = re.search(r'\[From:\s*(?:<code>)?(.*?)(?:<\/code>)?\]', replied_text)
+            if match:
+                whatsapp_jid = match.group(1).strip()
+                reply_content = message or rawtext or voice_text
+                if reply_content:
+                    logger.info(f"Replying to WhatsApp JID: {whatsapp_jid} with message: {reply_content}")
+                    try:
+                        import httpx
+                        async with httpx.AsyncClient(timeout=30) as client:
+                            r = await client.post("http://localhost:5001/send", json={
+                                "to": whatsapp_jid,
+                                "message": reply_content
+                            })
+                            if r.status_code == 200:
+                                await context.bot.send_message(
+                                    chat_id=chatid,
+                                    text=escape("✅ تم إرسال ردك إلى واتساب بنجاح!"),
+                                    reply_to_message_id=messageid
+                                )
+                                return
+                            else:
+                                raise Exception(f"Bridge error: {r.text}")
+                    except Exception as e:
+                        logger.error(f"Failed to send WhatsApp reply: {e}")
+                        await context.bot.send_message(
+                            chat_id=chatid,
+                            text=escape(f"❌ فشل إرسال الرد إلى واتساب: {e}"),
+                            reply_to_message_id=messageid
+                        )
+                        return
+
     # Intercept pending image model prompt input
     pending_model_id = context.user_data.get('pending_image_model')
     if pending_model_id and (message or voice_text or rawtext):
@@ -230,22 +265,52 @@ async def command_bot(update, context, title="", has_command=True):
             clean_msg = message.strip().replace(" ", "")
             if re.match(r'^\+20\d{9,11}$', clean_msg):
                 logger.info(f"WhatsApp Phone Link requested for: {clean_msg}. Generating pairing code...")
-                import random
-                import string
-                code = "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
-                formatted_code = f"{code[:4]}-{code[4:]}"
                 
-                response_text = (
-                    f"✅ <b>تم إنشاء طلب الربط بنجاح!</b>\n\n"
-                    f"رقم الهاتف: <code>{clean_msg}</code>\n"
-                    f"كود الربط الخاص بك: <code>{formatted_code}</code>\n\n"
-                    f"👉 <b>طريقة التفعيل:</b>\n"
-                    f"1. افتح تطبيق واتساب على هاتفك.\n"
-                    f"2. اذهب إلى <b>الأجهزة المرتبطة</b> (Linked Devices).\n"
-                    f"3. اختر <b>ربط جهاز</b> (Link a Device).\n"
-                    f"4. اضغط على <b>الربط برقم الهاتف بدلاً من ذلك</b> (Link with phone number instead).\n"
-                    f"5. أدخل كود الربط أعلاه."
-                )
+                try:
+                    import httpx
+                    async with httpx.AsyncClient(timeout=5) as client:
+                        try:
+                            status_r = await client.get("http://localhost:5001/status")
+                            if status_r.status_code == 200 and status_r.json().get("state") == "CONNECTED":
+                                await context.bot.send_message(
+                                    chat_id=chatid,
+                                    text="⚠️ <b>واتساب متصل بالفعل!</b>\n\nالبوت مرتبط بجهاز واتساب نشط حالياً. يرجى قطع الاتصال أولاً إذا كنت تريد ربط جهاز آخر.",
+                                    parse_mode='HTML'
+                                )
+                                return
+                        except Exception as status_err:
+                            logger.error(f"Status check failed: {status_err}")
+
+                    async with httpx.AsyncClient(timeout=30) as client:
+                        r = await client.post("http://localhost:5001/pair", json={"phone": clean_msg, "chat_id": chatid})
+                        if r.status_code == 200:
+                            data = r.json()
+                            code = data.get("code")
+                            if code:
+                                if len(code) == 8 and "-" not in code:
+                                    formatted_code = f"{code[:4]}-{code[4:]}"
+                                else:
+                                    formatted_code = code
+                                    
+                                response_text = (
+                                    f"✅ <b>تم إنشاء طلب الربط الحقيقي بنجاح!</b>\n\n"
+                                    f"رقم الهاتف: <code>{clean_msg}</code>\n"
+                                    f"كود الربط الخاص بك: <code>{formatted_code}</code>\n\n"
+                                    f"👉 <b>طريقة التفعيل:</b>\n"
+                                    f"1. افتح تطبيق واتساب على هاتفك.\n"
+                                    f"2. اذهب إلى <b>الأجهزة المرتبطة</b> (Linked Devices).\n"
+                                    f"3. اختر <b>ربط جهاز</b> (Link a Device).\n"
+                                    f"4. اضغط على <b>الربط برقم الهاتف بدلاً من ذلك</b> (Link with phone number instead).\n"
+                                    f"5. أدخل كود الربط أعلاه."
+                                )
+                            else:
+                                raise Exception("Pairing code not found in bridge response.")
+                        else:
+                            raise Exception(f"Bridge error: {r.text}")
+                except Exception as e:
+                    logger.error(f"WhatsApp Pairing failed: {e}")
+                    response_text = f"❌ <b>فشل ربط واتساب:</b> {e}"
+                
                 await context.bot.send_message(
                     chat_id=chatid,
                     text=response_text,
@@ -1263,15 +1328,36 @@ async def button_press(update, context):
             )
         elif data == "LINK_WHATSAPP":
             chatid = update.effective_chat.id
-            text = (
-                "💬 **إعدادات ربط البوت بـ WhatsApp**\n\n"
-                "اختر طريقة الربط المناسبة من الخيارات أدناه:"
-            )
-            keyboard = InlineKeyboardMarkup([
+            
+            # Fetch current status
+            import httpx
+            status_text = "🔴 **البوت غير متصل بـ WhatsApp حالياً**"
+            keyboard_buttons = [
                 [InlineKeyboardButton("الربط بالرقم (+20) 📱", callback_data="WA_LINK_PHONE")],
                 [InlineKeyboardButton("الربط برمز QR 🔗", callback_data="WA_LINK_QR")],
                 [InlineKeyboardButton("⬅️ رجوع / Back", callback_data="PLUGINS")]
-            ])
+            ]
+            try:
+                async with httpx.AsyncClient(timeout=5) as client:
+                    r = await client.get("http://localhost:5001/status")
+                    if r.status_code == 200:
+                        status_data = r.json()
+                        if status_data.get("state") == "CONNECTED":
+                            status_text = "🟢 **البوت متصل بـ WhatsApp حالياً!**\n\nالرقم متصل وجاهز لاستقبال وإرسال الرسائل."
+                            keyboard_buttons = [
+                                [InlineKeyboardButton("قطع الاتصال ⚠️ / Disconnect", callback_data="WA_DISCONNECT")],
+                                [InlineKeyboardButton("⬅️ رجوع / Back", callback_data="PLUGINS")]
+                            ]
+            except Exception as e:
+                logger.error(f"Failed to fetch WhatsApp bridge status: {e}")
+                status_text += "\n*(ملاحظة: تعذر الاتصال بجسر واتساب، قد يكون غير نشط حالياً)*"
+
+            text = (
+                "💬 **إعدادات ربط البوت بـ WhatsApp**\n\n"
+                f"{status_text}\n\n"
+                "اختر طريقة الربط المناسبة من الخيارات أدناه:"
+            )
+            keyboard = InlineKeyboardMarkup(keyboard_buttons)
             
             is_photo = bool(callback_query.message.photo)
             if is_photo:
@@ -1292,6 +1378,23 @@ async def button_press(update, context):
                     parse_mode='MarkdownV2'
                 )
         elif data == "WA_LINK_PHONE":
+            chatid = update.effective_chat.id
+            # Check status first
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=5) as client:
+                    r = await client.get("http://localhost:5001/status")
+                    if r.status_code == 200 and r.json().get("state") == "CONNECTED":
+                        await callback_query.answer("⚠️ واتساب متصل بالفعل!")
+                        await context.bot.send_message(
+                            chat_id=chatid,
+                            text=escape("⚠️ **واتساب متصل بالفعل!**\n\nالبوت مرتبط بجهاز واتساب نشط حالياً. يرجى قطع الاتصال أولاً إذا كنت تريد ربط جهاز آخر."),
+                            parse_mode='MarkdownV2'
+                        )
+                        return
+            except Exception as e:
+                logger.error(f"Status check failed before phone input instruction: {e}")
+
             text = (
                 "📱 **الربط عبر رقم الهاتف (+20)**\n\n"
                 "الرجاء كتابة وإرسال رقم هاتفك المصري مبدوءاً بـ `+20` لتوليد كود الربط الخاص بك.\n\n"
@@ -1308,28 +1411,135 @@ async def button_press(update, context):
             )
         elif data == "WA_LINK_QR":
             chatid = update.effective_chat.id
-            qr_url = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://wa.me/settings"
-            caption = (
-                f"🔗 **الربط عبر رمز QR (WhatsApp Web)**\n\n"
-                f"👉 **طريقة التفعيل:**\n"
-                f"1. افتح تطبيق واتساب على هاتفك.\n"
-                f"2. اذهب إلى **الأجهزة المرتبطة** (Linked Devices).\n"
-                f"3. اضغط على **ربط جهاز** (Link a Device).\n"
-                f"4. قم بتوجيه كاميرا الهاتف لمسح رمز QR المرفق."
-            )
-            await context.bot.send_photo(
+            
+            # Check status first
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=5) as client:
+                    r = await client.get("http://localhost:5001/status")
+                    if r.status_code == 200 and r.json().get("state") == "CONNECTED":
+                        await callback_query.answer("⚠️ واتساب متصل بالفعل!")
+                        await context.bot.send_message(
+                            chat_id=chatid,
+                            text=escape("⚠️ **واتساب متصل بالفعل!**\n\nالبوت مرتبط بجهاز واتساب نشط حالياً. يرجى قطع الاتصال أولاً إذا كنت تريد ربط جهاز آخر."),
+                            parse_mode='MarkdownV2'
+                        )
+                        return
+            except Exception as e:
+                logger.error(f"Status check failed before QR init: {e}")
+
+            # Send waiting message
+            waiting_message = await context.bot.send_message(
                 chat_id=chatid,
-                photo=qr_url,
-                caption=escape(caption),
-                parse_mode='MarkdownV2',
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("⬅️ رجوع / Back", callback_data="LINK_WHATSAPP")]
-                ])
+                text=escape("⏳ جاري تهيئة واتساب وتوليد رمز QR... يرجى الانتظار.")
+            )
+            
+            try:
+                import httpx
+                import os
+                import asyncio
+                async with httpx.AsyncClient(timeout=20) as client:
+                    # 1. Initialize WhatsApp connection
+                    await client.post("http://localhost:5001/init", json={"chat_id": chatid})
+                    
+                    # 2. Wait for QR code generation
+                    qr_path = "whatsapp_bridge/session/qr.png"
+                    qr_generated = False
+                    for _ in range(10):
+                        if os.path.exists(qr_path):
+                            qr_generated = True
+                            break
+                        await asyncio.sleep(1.5)
+                    
+                    if qr_generated:
+                        caption = (
+                            f"🔗 **الربط عبر رمز QR (WhatsApp Web)**\n\n"
+                            f"👉 **طريقة التفعيل:**\n"
+                            f"1. افتح تطبيق واتساب على هاتفك.\n"
+                            f"2. اذهب إلى **الأجهزة المرتبطة** (Linked Devices).\n"
+                            f"3. اضغط على **ربط جهاز** (Link a Device).\n"
+                            f"4. قم بتوجيه كاميرا الهاتف لمسح رمز QR المرفق."
+                        )
+                        with open(qr_path, "rb") as f:
+                            await context.bot.send_photo(
+                                chat_id=chatid,
+                                photo=f,
+                                caption=escape(caption),
+                                parse_mode='MarkdownV2',
+                                reply_markup=InlineKeyboardMarkup([
+                                    [InlineKeyboardButton("⬅️ رجوع / Back", callback_data="LINK_WHATSAPP")]
+                                ])
+                             )
+                        try:
+                            await callback_query.delete_message()
+                        except Exception:
+                            pass
+                    else:
+                        raise Exception("لم يتم توليد رمز QR، يرجى المحاولة لاحقاً.")
+            except Exception as e:
+                logger.error(f"WhatsApp QR generation failed: {e}")
+                await context.bot.send_message(
+                    chat_id=chatid,
+                    text=escape(f"❌ فشل توليد رمز QR: {e}")
+                )
+            finally:
+                try:
+                    await context.bot.delete_message(chat_id=chatid, message_id=waiting_message.message_id)
+                except Exception:
+                    pass
+        elif data == "WA_DISCONNECT":
+            chatid = update.effective_chat.id
+            waiting_message = await context.bot.send_message(
+                chat_id=chatid,
+                text=escape("⏳ جاري قطع اتصال واتساب ومسح الجلسة... يرجى الانتظار.")
             )
             try:
-                await callback_query.delete_message()
-            except Exception:
-                pass
+                import httpx
+                async with httpx.AsyncClient(timeout=20) as client:
+                    r = await client.post("http://localhost:5001/disconnect")
+                    if r.status_code == 200:
+                        await context.bot.send_message(
+                            chat_id=chatid,
+                            text="✅ <b>تم قطع اتصال واتساب ومسح الجلسة بنجاح!</b>",
+                            parse_mode='HTML'
+                        )
+                    else:
+                        raise Exception(f"Bridge error: {r.text}")
+            except Exception as e:
+                logger.error(f"WhatsApp Disconnect failed: {e}")
+                await context.bot.send_message(
+                    chat_id=chatid,
+                    text=escape(f"❌ فشل قطع الاتصال: {e}")
+                )
+            finally:
+                try:
+                    await context.bot.delete_message(chat_id=chatid, message_id=waiting_message.message_id)
+                except Exception:
+                    pass
+                
+                try:
+                    await callback_query.delete_message()
+                except Exception:
+                    pass
+                
+                # Show main settings menu again
+                status_text = "🔴 **البوت غير متصل بـ WhatsApp حالياً**"
+                keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("الربط بالرقم (+20) 📱", callback_data="WA_LINK_PHONE")],
+                    [InlineKeyboardButton("الربط برمز QR 🔗", callback_data="WA_LINK_QR")],
+                    [InlineKeyboardButton("⬅️ رجوع / Back", callback_data="PLUGINS")]
+                ])
+                text = (
+                    "💬 **إعدادات ربط البوت بـ WhatsApp**\n\n"
+                    f"{status_text}\n\n"
+                    "اختر طريقة الربط المناسبة من الخيارات أدناه:"
+                )
+                await context.bot.send_message(
+                    chat_id=chatid,
+                    text=escape(text),
+                    parse_mode='MarkdownV2',
+                    reply_markup=keyboard
+                )
         elif data == "USE_OWN_KEY":
             text = (
                 "🔑 **استخدام مفتاح خاص بك / Use Your Own Key**\n\n"
