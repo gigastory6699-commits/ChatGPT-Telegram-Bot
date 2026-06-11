@@ -45,7 +45,7 @@ from utils.i18n import strings
 from utils.scripts import GetMesageInfo, safe_get, is_emoji
 
 from telegram.constants import ChatAction
-from telegram import BotCommand, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent, Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InputMediaPhoto, InlineKeyboardButton, WebAppInfo
+from telegram import BotCommand, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent, Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InputMediaPhoto, InlineKeyboardButton, WebAppInfo, MenuButtonWebApp
 from telegram.ext import CommandHandler, MessageHandler, ApplicationBuilder, filters, CallbackQueryHandler, Application, AIORateLimiter, InlineQueryHandler, ContextTypes
 from datetime import timedelta
 
@@ -2811,6 +2811,18 @@ async def start(update, context): # 当用户输入/start时，返回文本
     #     ">The last line of the expandable block quotation with the expandability mark||\n"
     # )
     # await update.message.reply_text(message, parse_mode='MarkdownV2', disable_web_page_preview=True)
+    try:
+        domain = os.environ.get("RAILWAY_STATIC_URL", "")
+        web_app_url = f"https://{domain}/panel" if domain else f"http://localhost:{WA_PORT}/panel"
+        await context.bot.set_chat_menu_button(
+            chat_id=update.effective_chat.id,
+            menu_button=MenuButtonWebApp(
+                text="التحكم بالواتساب 🌐",
+                web_app=WebAppInfo(url=web_app_url)
+            )
+        )
+    except Exception as e:
+        logger.error(f"Failed to set user chat menu button in start handler: {e}")
     await update.message.reply_text(escape(message, italic=False), parse_mode='MarkdownV2', disable_web_page_preview=True)
 
 async def error(update, context):
@@ -2833,6 +2845,17 @@ async def unknown(update, context): # 当用户输入未知命令时，返回文
 async def post_init(application: Application) -> None:
     if GET_MODELS:
         await get_initial_model()
+    try:
+        domain = os.environ.get("RAILWAY_STATIC_URL", "")
+        web_app_url = f"https://{domain}/panel" if domain else f"http://localhost:{WA_PORT}/panel"
+        await application.bot.set_chat_menu_button(
+            menu_button=MenuButtonWebApp(
+                text="التحكم بالواتساب 🌐",
+                web_app=WebAppInfo(url=web_app_url)
+            )
+        )
+    except Exception as e:
+        logger.error(f"Failed to set default chat menu button: {e}")
     await application.bot.set_my_commands([
         BotCommand('info', 'Basic information'),
         BotCommand('reset', 'Reset the bot'),
