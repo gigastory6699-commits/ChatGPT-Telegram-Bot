@@ -1577,7 +1577,7 @@ async def button_press(update, context):
                 logger.error(f"WhatsApp Toggle AI failed: {e}")
                 await callback_query.answer("❌ فشل تعديل إعداد الرد التلقائي")
             
-            # Show updated LINK_WHATSAPP menu
+            # Re-render status screen
             import httpx
             status_text = "🔴 **البوت غير متصل بـ WhatsApp حالياً**"
             keyboard_buttons = [
@@ -1591,27 +1591,104 @@ async def button_press(update, context):
                     if r.status_code == 200:
                         status_data = r.json()
                         if status_data.get("state") == "CONNECTED":
-                            ai_status = "تفعيل"
                             try:
                                 r_config = await client.get("http://localhost:5001/config")
                                 if r_config.status_code == 200:
                                     config_data = r_config.json()
-                                    if config_data.get("ai_auto_reply") is True:
-                                        ai_status = "تعطيل 🧠"
-                                        status_text = "🟢 **البوت متصل بـ WhatsApp حالياً!**\n\nالرقم متصل وجاهز، وميزة **الرد التلقائي بالذكاء الاصطناعي مفعلة**."
-                                    else:
-                                        ai_status = "تفعيل 🧠"
-                                        status_text = "🟢 **البوت متصل بـ WhatsApp حالياً!**\n\nالرقم متصل وجاهز، وميزة **الرد التلقائي بالذكاء الاصطناعي معطلة**."
+                                    ai_auto = config_data.get("ai_auto_reply", False)
+                                    ai_voice = config_data.get("ai_voice_reply", False)
+                                    
+                                    ai_auto_word = "تعطيل 🧠" if ai_auto else "تفعيل 🧠"
+                                    ai_voice_word = "تعطيل 🎙️" if ai_voice else "تفعيل 🎙️"
+                                    
+                                    status_text = (
+                                        "🟢 **البوت متصل بـ WhatsApp حالياً!**\n\n"
+                                        f"• الرد التلقائي بالذكاء الاصطناعي: `{'مفعل' if ai_auto else 'معطل'}`\n"
+                                        f"• نوع الرد التلقائي: `{'صوتي (ميكروفون)' if ai_voice else 'نصي كتابي'}`"
+                                    )
+                                    keyboard_buttons = [
+                                        [InlineKeyboardButton(f"{ai_auto_word} الرد التلقائي", callback_data="WA_TOGGLE_AI")],
+                                        [InlineKeyboardButton(f"{ai_voice_word} الرد الصوتي", callback_data="WA_TOGGLE_VOICE")],
+                                        [InlineKeyboardButton("قطع الاتصال ⚠️ / Disconnect", callback_data="WA_DISCONNECT")],
+                                        [InlineKeyboardButton("⬅️ رجوع / Back", callback_data="PLUGINS")]
+                                    ]
                             except Exception as config_err:
                                 logger.error(f"Failed to fetch config: {config_err}")
-                                ai_status = "تفعيل 🧠"
                                 status_text = "🟢 **البوت متصل بـ WhatsApp حالياً!**\n\nالرقم متصل وجاهز لاستقبال وإرسال الرسائل."
+            except Exception as e:
+                logger.error(f"Failed to fetch WhatsApp bridge status: {e}")
+                status_text += "\n*(ملاحظة: تعذر الاتصال بجسر واتساب، قد يكون غير نشط حالياً)*"
 
-                            keyboard_buttons = [
-                                [InlineKeyboardButton(f"{ai_status} الرد التلقائي", callback_data="WA_TOGGLE_AI")],
-                                [InlineKeyboardButton("قطع الاتصال ⚠️ / Disconnect", callback_data="WA_DISCONNECT")],
-                                [InlineKeyboardButton("⬅️ رجوع / Back", callback_data="PLUGINS")]
-                            ]
+            text = (
+                "💬 **إعدادات ربط البوت بـ WhatsApp**\n\n"
+                f"{status_text}\n\n"
+                "اختر طريقة الربط المناسبة من الخيارات أدناه:"
+            )
+            keyboard = InlineKeyboardMarkup(keyboard_buttons)
+            await callback_query.edit_message_text(
+                text=escape(text),
+                reply_markup=keyboard,
+                parse_mode='MarkdownV2'
+            )
+        elif data == "WA_TOGGLE_VOICE":
+            chatid = update.effective_chat.id
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=10) as client:
+                    r_config = await client.get("http://localhost:5001/config")
+                    current_voice = False
+                    if r_config.status_code == 200:
+                        current_voice = r_config.json().get("ai_voice_reply", False)
+                    
+                    new_voice = not current_voice
+                    r_toggle = await client.post("http://localhost:5001/config", json={"ai_voice_reply": new_voice})
+                    if r_toggle.status_code == 200:
+                        status_word = "تفعيل" if new_voice else "تعطيل"
+                        await callback_query.answer(f"✅ تم {status_word} الرد الصوتي بنجاح!")
+                    else:
+                        raise Exception(f"Bridge config error: {r_toggle.text}")
+            except Exception as e:
+                logger.error(f"WhatsApp Toggle Voice failed: {e}")
+                await callback_query.answer("❌ فشل تعديل إعداد الرد الصوتي")
+            
+            # Re-render status screen
+            import httpx
+            status_text = "🔴 **البوت غير متصل بـ WhatsApp حالياً**"
+            keyboard_buttons = [
+                [InlineKeyboardButton("الربط بالرقم (+20) 📱", callback_data="WA_LINK_PHONE")],
+                [InlineKeyboardButton("الربط برمز QR 🔗", callback_data="WA_LINK_QR")],
+                [InlineKeyboardButton("⬅️ رجوع / Back", callback_data="PLUGINS")]
+            ]
+            try:
+                async with httpx.AsyncClient(timeout=5) as client:
+                    r = await client.get("http://localhost:5001/status")
+                    if r.status_code == 200:
+                        status_data = r.json()
+                        if status_data.get("state") == "CONNECTED":
+                            try:
+                                r_config = await client.get("http://localhost:5001/config")
+                                if r_config.status_code == 200:
+                                    config_data = r_config.json()
+                                    ai_auto = config_data.get("ai_auto_reply", False)
+                                    ai_voice = config_data.get("ai_voice_reply", False)
+                                    
+                                    ai_auto_word = "تعطيل 🧠" if ai_auto else "تفعيل 🧠"
+                                    ai_voice_word = "تعطيل 🎙️" if ai_voice else "تفعيل 🎙️"
+                                    
+                                    status_text = (
+                                        "🟢 **البوت متصل بـ WhatsApp حالياً!**\n\n"
+                                        f"• الرد التلقائي بالذكاء الاصطناعي: `{'مفعل' if ai_auto else 'معطل'}`\n"
+                                        f"• نوع الرد التلقائي: `{'صوتي (ميكروفون)' if ai_voice else 'نصي كتابي'}`"
+                                    )
+                                    keyboard_buttons = [
+                                        [InlineKeyboardButton(f"{ai_auto_word} الرد التلقائي", callback_data="WA_TOGGLE_AI")],
+                                        [InlineKeyboardButton(f"{ai_voice_word} الرد الصوتي", callback_data="WA_TOGGLE_VOICE")],
+                                        [InlineKeyboardButton("قطع الاتصال ⚠️ / Disconnect", callback_data="WA_DISCONNECT")],
+                                        [InlineKeyboardButton("⬅️ رجوع / Back", callback_data="PLUGINS")]
+                                    ]
+                            except Exception as config_err:
+                                logger.error(f"Failed to fetch config: {config_err}")
+                                status_text = "🟢 **البوت متصل بـ WhatsApp حالياً!**\n\nالرقم متصل وجاهز لاستقبال وإرسال الرسائل."
             except Exception as e:
                 logger.error(f"Failed to fetch WhatsApp bridge status: {e}")
                 status_text += "\n*(ملاحظة: تعذر الاتصال بجسر واتساب، قد يكون غير نشط حالياً)*"

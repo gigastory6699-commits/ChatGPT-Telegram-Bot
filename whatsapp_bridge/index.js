@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -18,13 +18,15 @@ let connectionState = 'DISCONNECTED';
 let telegramChatId = null;
 let reconnectTimeout = null;
 let aiAutoReply = false;
+let aiVoiceReply = false;
 
 // Load AI auto-reply config if exists
 try {
     if (fs.existsSync('session/config.json')) {
         const configData = JSON.parse(fs.readFileSync('session/config.json', 'utf-8'));
         aiAutoReply = !!configData.ai_auto_reply;
-        console.log("Loaded WhatsApp bridge config, AI Auto-Reply is:", aiAutoReply);
+        aiVoiceReply = !!configData.ai_voice_reply;
+        console.log("Loaded WhatsApp bridge config, AI Auto-Reply:", aiAutoReply, "AI Voice Reply:", aiVoiceReply);
     }
 } catch (e) {
     console.error("Failed to load config on startup:", e.message);
@@ -59,9 +61,8 @@ function escapeHtml(str) {
         .replace(/>/g, "&gt;");
 }
 
-async function getAIResponse(userMessage) {
+async function getAIResponse(userMessage, base64Image = null) {
     const groqKey = process.env.GROQ_API_KEY;
-    const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
     
     if (!groqKey) {
         console.error("GROQ_API_KEY not found in environment variables.");
@@ -69,21 +70,49 @@ async function getAIResponse(userMessage) {
     }
 
     try {
-        console.log(`Generating AI response for message: "${userMessage}" using model: ${model}`);
+        let messages = [];
+        if (base64Image) {
+            console.log("Generating AI response with Groq Vision...");
+            messages = [
+                {
+                    role: "system",
+                    content: "أنت مساعد ذكي ومحترف تجيب على رسائل الواتساب وتستطيع رؤية الصور وتحليلها بدقة واختصار وباللغة العربية الفصحى. تجنب تماماً استخدام أي علامات تنسيق ماركداون (مثل ** أو * أو `) في إجابتك."
+                },
+                {
+                    role: "user",
+                    content: [
+                        {
+                            type: "text",
+                            text: userMessage || "صف هذه الصورة بالتفصيل."
+                        },
+                        {
+                            type: "image_url",
+                            image_url: {
+                                url: `data:image/jpeg;base64,${base64Image}`
+                            }
+                        }
+                    ]
+                }
+            ];
+        } else {
+            console.log(`Generating AI response for message: "${userMessage}"`);
+            messages = [
+                {
+                    role: "system",
+                    content: "أنت مساعد ذكي ومحترف تجيب على رسائل الواتساب بدقة واختصار وباللغة العربية الفصحى. تجنب تماماً استخدام أي علامات تنسيق ماركداون (مثل ** أو * أو `) في إجابتك، واجعل الرد يبدو طبيعياً كرسالة واتساب عادية."
+                },
+                {
+                    role: "user",
+                    content: userMessage
+                }
+            ];
+        }
+
         const response = await axios.post(
             "https://api.groq.com/openai/v1/chat/completions",
             {
-                model: model,
-                messages: [
-                    {
-                        role: "system",
-                        content: "أنت مساعد ذكي ومحترف تجيب على رسائل الواتساب بدقة واختصار وباللغة العربية الفصحى. تجنب تماماً استخدام أي علامات تنسيق ماركداون (مثل ** أو * أو `) في إجابتك، واجعل الرد يبدو طبيعياً كرسالة واتساب عادية."
-                    },
-                    {
-                        role: "user",
-                        content: userMessage
-                    }
-                ],
+                model: base64Image ? "llama-3.2-11b-vision-preview" : (process.env.GROQ_MODEL || "llama-3.3-70b-versatile"),
+                messages: messages,
                 temperature: 0.7
             },
             {
@@ -91,7 +120,7 @@ async function getAIResponse(userMessage) {
                     "Authorization": `Bearer ${groqKey}`,
                     "Content-Type": "application/json"
                 },
-                timeout: 15000
+                timeout: 25000
             }
         );
 
@@ -142,28 +171,115 @@ async function handleIncomingWhatsAppMessage(msg) {
     await sendTelegramMessage(notification);
 
     const isGroup = senderJid.endsWith('@g.us');
-    const isPlaceholderText = text.startsWith('[') && text.endsWith(']');
-    const rawText = isPlaceholderText ? "" : text;
-
-    if (aiAutoReply && !isGroup && rawText && rawText.trim().length > 0) {
+    
+    if (aiAutoReply && !isGroup) {
         // Run AI response asynchronously to avoid blocking the main event flow
         (async () => {
             try {
-                // Send composing presence
-                try {
-                    await sock.sendPresenceUpdate('composing', senderJid);
-                } catch (presenceErr) {}
+                let base64Image = null;
+                let rawText = text;
+                
+                // 1. Handle Voice Note inputs (Transcription)
+                if (msg.message.audioMessage) {
+                    try {
+                        console.log("Downloading WhatsApp audio message...");
+                        const buffer = await downloadMediaMessage(
+                            msg,
+                            'buffer',
+                            {},
+                            { 
+                                logger: pino({ level: 'error' }),
+                                reuploadRequest: sock.updateMediaMessage
+                            }
+                        );
+                        
+                        console.log("Transcribing audio via proxy...");
+                        const transResp = await axios.post("http://localhost:8090/transcribe", buffer, {
+                            headers: { 'Content-Type': 'audio/ogg' }
+                        });
+                        
+                        if (transResp.data && transResp.data.text) {
+                            console.log(`Transcribed text: "${transResp.data.text}"`);
+                            rawText = transResp.data.text;
+                        } else {
+                            rawText = "";
+                        }
+                    } catch (transErr) {
+                        console.error("Transcription failed:", transErr.message);
+                        rawText = "";
+                    }
+                }
+                
+                // 2. Handle Image inputs (Groq Vision)
+                else if (msg.message.imageMessage) {
+                    try {
+                        console.log("Downloading WhatsApp image message...");
+                        const buffer = await downloadMediaMessage(
+                            msg,
+                            'buffer',
+                            {},
+                            { 
+                                logger: pino({ level: 'error' }),
+                                reuploadRequest: sock.updateMediaMessage
+                            }
+                        );
+                        base64Image = buffer.toString('base64');
+                        rawText = msg.message.imageMessage.caption || "صف هذه الصورة بالتفصيل.";
+                    } catch (downloadErr) {
+                        console.error("Failed to download media message:", downloadErr.message);
+                        rawText = "";
+                    }
+                }
+                
+                // 3. Filter out placeholder text
+                const isPlaceholderText = rawText.startsWith('[') && rawText.endsWith(']');
+                if (isPlaceholderText) {
+                    rawText = "";
+                }
 
-                // Get AI response
-                const aiResponse = await getAIResponse(rawText);
-                if (aiResponse) {
-                    await sock.sendMessage(senderJid, { text: aiResponse });
-                    console.log(`Auto-replied to ${senderJid} with AI response.`);
+                if (rawText && rawText.trim().length > 0) {
+                    // Send composing or recording presence
+                    try {
+                        const presence = aiVoiceReply ? 'recording' : 'composing';
+                        await sock.sendPresenceUpdate(presence, senderJid);
+                    } catch (presenceErr) {}
+
+                    // Get AI response
+                    const aiResponse = await getAIResponse(rawText, base64Image);
+                    if (aiResponse) {
+                        if (aiVoiceReply) {
+                            try {
+                                console.log("Calling Edge TTS via proxy...");
+                                const ttsUrl = `http://localhost:8090/tts?text=${encodeURIComponent(aiResponse)}`;
+                                const ttsResp = await axios.get(ttsUrl, { responseType: 'arraybuffer' });
+                                
+                                const tempFilePath = `session/temp_voice_${Date.now()}.mp3`;
+                                fs.writeFileSync(tempFilePath, Buffer.from(ttsResp.data));
+                                
+                                await sock.sendMessage(senderJid, { 
+                                    audio: { url: tempFilePath }, 
+                                    mimetype: 'audio/mp4', 
+                                    ptt: true 
+                                });
+                                console.log(`Auto-replied to ${senderJid} with AI Voice message.`);
+                                
+                                try {
+                                    fs.unlinkSync(tempFilePath);
+                                } catch (cleanErr) {}
+                            } catch (ttsErr) {
+                                console.error("TTS generation or sending failed, falling back to text:", ttsErr.message);
+                                await sock.sendMessage(senderJid, { text: aiResponse });
+                            }
+                        } else {
+                            await sock.sendMessage(senderJid, { text: aiResponse });
+                            console.log(`Auto-replied to ${senderJid} with AI text response.`);
+                        }
+                    }
                 }
             } catch (err) {
                 console.error("AI Auto-reply error:", err.message);
             } finally {
-                // Stop composing presence
+                // Stop presence
                 try {
                     await sock.sendPresenceUpdate('paused', senderJid);
                 } catch (presenceErr) {}
@@ -392,19 +508,24 @@ app.post('/disconnect', async (req, res) => {
 
 app.get('/config', (req, res) => {
     res.json({
-        ai_auto_reply: aiAutoReply
+        ai_auto_reply: aiAutoReply,
+        ai_voice_reply: aiVoiceReply
     });
 });
 
 app.post('/config', (req, res) => {
-    const { ai_auto_reply } = req.body;
-    aiAutoReply = !!ai_auto_reply;
+    const { ai_auto_reply, ai_voice_reply } = req.body;
+    if (ai_auto_reply !== undefined) aiAutoReply = !!ai_auto_reply;
+    if (ai_voice_reply !== undefined) aiVoiceReply = !!ai_voice_reply;
     try {
         if (!fs.existsSync('session')) {
             fs.mkdirSync('session');
         }
-        fs.writeFileSync('session/config.json', JSON.stringify({ ai_auto_reply: aiAutoReply }, null, 2));
-        res.json({ success: true, ai_auto_reply: aiAutoReply });
+        fs.writeFileSync('session/config.json', JSON.stringify({
+            ai_auto_reply: aiAutoReply,
+            ai_voice_reply: aiVoiceReply
+        }, null, 2));
+        res.json({ success: true, ai_auto_reply: aiAutoReply, ai_voice_reply: aiVoiceReply });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

@@ -215,6 +215,75 @@ class FakeZeroProxy(BaseHTTPRequestHandler):
             self._send_response(mock_models, 200)
             return
 
+        if "/tts" in path:
+            import urllib.parse
+            query_components = urllib.parse.parse_qs(urllib.parse.urlparse(path).query)
+            text = query_components.get("text", [""])[0]
+            if not text:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"Missing text parameter")
+                return
+
+            try:
+                import edge_tts
+                import tempfile
+                import asyncio
+                import uuid
+                
+                voice_name = os.environ.get('TTS_VOICE', 'egyptian-male')
+                edge_voice = "ar-EG-ShakirNeural"
+                if voice_name.lower() in ['shakir', 'egyptian-male', 'egypt-male']:
+                    edge_voice = "ar-EG-ShakirNeural"
+                elif voice_name.lower() in ['salma', 'egyptian-female', 'egypt-female']:
+                    edge_voice = "ar-EG-SalmaNeural"
+                else:
+                    edge_voice = voice_name
+                
+                print(f"Generating Edge TTS for proxy request: text length={len(text)}, voice={edge_voice}")
+                
+                temp_dir = tempfile.gettempdir()
+                temp_file_path = os.path.join(temp_dir, f"proxy_tts_{uuid.uuid4().hex}.mp3")
+                
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                
+                # Clean text from emojis / markdown
+                import re
+                clean_text = re.sub(r'```[\s\S]*?```', '', text)
+                clean_text = re.sub(r'`([^`]+)`', r'\1', clean_text)
+                clean_text = re.sub(r'[\*_]{1,2}(.*?)[\*_]{1,2}', r'\1', clean_text)
+                clean_text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', clean_text)
+                clean_text = re.sub(r'\s+', ' ', clean_text)
+                clean_text = clean_text.strip()
+                
+                communicate = edge_tts.Communicate(clean_text[:1000], edge_voice)
+                loop.run_until_complete(communicate.save(temp_file_path))
+                
+                with open(temp_file_path, "rb") as f:
+                    content = f.read()
+                
+                try:
+                    os.remove(temp_file_path)
+                except Exception:
+                    pass
+                
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/mpeg")
+                self.send_header("Content-Length", str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+                return
+            except Exception as e:
+                print(f"Proxy Edge TTS failed: {e}")
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(str(e).encode('utf-8'))
+                return
+
         resp_tuple = self._forward_request("GET", path)
         if resp_tuple and resp_tuple[0] is not None:
             resp, is_image, is_video, is_stream = resp_tuple
@@ -234,6 +303,62 @@ class FakeZeroProxy(BaseHTTPRequestHandler):
         path = self.path
         print(f"POST {path}")
         
+        if "/transcribe" in path:
+            content_length = int(self.headers.get('Content-Length', 0))
+            audio_bytes = self.rfile.read(content_length) if content_length > 0 else b""
+            if not audio_bytes:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"Missing audio body")
+                return
+            
+            try:
+                groq_key = os.environ.get("GROQ_API_KEY")
+                if not groq_key:
+                    raise Exception("GROQ_API_KEY not found")
+                
+                import tempfile
+                import uuid
+                temp_dir = tempfile.gettempdir()
+                temp_file_path = os.path.join(temp_dir, f"transcribe_{uuid.uuid4().hex}.ogg")
+                with open(temp_file_path, "wb") as f:
+                    f.write(audio_bytes)
+                
+                url = "https://api.groq.com/openai/v1/audio/transcriptions"
+                headers = {
+                    "Authorization": f"Bearer {groq_key}"
+                }
+                files = {
+                    "file": (os.path.basename(temp_file_path), open(temp_file_path, "rb"), "audio/ogg"),
+                }
+                data = {
+                    "model": "whisper-large-v3",
+                    "language": "ar"
+                }
+                
+                resp = requests.post(url, headers=headers, files=files, data=data, timeout=30)
+                
+                try:
+                    os.remove(temp_file_path)
+                except Exception:
+                    pass
+                
+                if resp.status_code == 200:
+                    text = resp.json().get("text", "")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"text": text}, ensure_ascii=False).encode('utf-8'))
+                else:
+                    raise Exception(f"Groq Whisper returned {resp.status_code}: {resp.text}")
+                return
+            except Exception as e:
+                print(f"Transcription failed: {e}")
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(str(e).encode('utf-8'))
+                return
+
         # 🎨 توليد الصور باستخدام Fal.ai مع الانتقال التلقائي لـ Pollinations.ai في حالة فشل الرصيد
         is_image = "/images/generations" in path
         if is_image:
