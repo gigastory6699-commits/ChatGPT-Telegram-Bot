@@ -231,7 +231,7 @@ class FakeZeroProxy(BaseHTTPRequestHandler):
                 import asyncio
                 import uuid
                 
-                voice_name = os.environ.get('TTS_VOICE', 'egyptian-male')
+                voice_name = query_components.get("voice", [os.environ.get('TTS_VOICE', 'egyptian-male')])[0]
                 edge_voice = "ar-EG-ShakirNeural"
                 if voice_name.lower() in ['shakir', 'egyptian-male', 'egypt-male']:
                     edge_voice = "ar-EG-ShakirNeural"

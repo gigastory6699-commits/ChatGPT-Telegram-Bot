@@ -3,271 +3,954 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة تحكم جسر واتساب - تليجرام</title>
+    <title>لوحة التحكم الذكية - جسر واتساب AI</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google Fonts: Outfit & Cairo -->
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Google Fonts: Cairo & Outfit -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&family=Outfit:wght@300;400;600;700;900&display=swap" rel="stylesheet">
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body {
             font-family: 'Cairo', 'Outfit', sans-serif;
-            background: radial-gradient(circle at top, #1a1c24 0%, #0d0e12 100%);
+            background: radial-gradient(circle at top, #11131c 0%, #07080a 100%);
             color: #e2e8f0;
             min-height: 100vh;
         }
         .glass-card {
-            background: rgba(22, 24, 33, 0.7);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        }
-        .glow-green {
-            box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
-        }
-        .glow-red {
-            box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+            background: rgba(18, 20, 29, 0.65);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.4);
         }
         .glow-indigo {
-            box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
+            box-shadow: 0 0 25px rgba(99, 102, 241, 0.15);
         }
-        .custom-switch:checked + .custom-slider {
-            background-color: #6366f1;
+        .glow-green {
+            box-shadow: 0 0 25px rgba(16, 185, 129, 0.15);
         }
-        .custom-switch:checked + .custom-slider:before {
-            transform: translateX(-26px);
+        .glow-red {
+            box-shadow: 0 0 25px rgba(239, 68, 68, 0.15);
         }
-        /* Custom scrollbar */
-        #logs-container::-webkit-scrollbar {
-            width: 4px;
+        /* Hide scrollbars but keep functionality */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
         }
-        #logs-container::-webkit-scrollbar-track {
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* Custom scrollbars for details */
+        .custom-scroll::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
             background: rgba(0, 0, 0, 0.1);
         }
-        #logs-container::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 2px;
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 4px;
         }
-        #logs-container::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.2);
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        .neon-border-active {
+            border: 1px solid rgba(99, 102, 241, 0.4);
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.15);
         }
     </style>
 </head>
-<body class="p-4 md:p-6 select-none">
-    <div class="max-w-md mx-auto space-y-6">
+<body class="overflow-x-hidden pb-24 md:pb-0">
+
+    <!-- Desktop Sidebar Layout -->
+    <div class="flex min-h-screen">
         
-        <!-- Header -->
-        <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-3 space-x-reverse">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center text-white text-xl shadow-lg shadow-indigo-500/20">
+        <!-- Sidebar -->
+        <aside class="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 md:right-0 glass-card border-l border-slate-800/50 z-30">
+            <!-- Brand Logo & Name -->
+            <div class="flex items-center space-x-3 space-x-reverse px-6 py-6 border-b border-slate-800/40">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xl shadow-lg shadow-indigo-500/20">
                     <i class="fa-brands fa-whatsapp"></i>
                 </div>
                 <div>
-                    <h1 class="text-lg font-bold tracking-wide">جسر واتساب الذكي</h1>
-                    <p class="text-xs text-slate-400">إدارة البوت والربط بالذكاء الاصطناعي</p>
+                    <h1 class="text-sm font-black tracking-wide text-white">منصة الجسر الذكي</h1>
+                    <span class="text-[10px] text-indigo-400 font-semibold bg-indigo-500/10 px-2 py-0.5 rounded-full">النسخة الاحترافية PRO</span>
                 </div>
             </div>
-            <button onclick="checkStatus(true)" class="p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 transition-all">
-                <i id="refresh-icon" class="fa-solid fa-arrows-rotate text-sm text-slate-400"></i>
+
+            <!-- Navigation Links -->
+            <nav class="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto custom-scroll">
+                <button onclick="switchTab('dashboard')" id="btn-tab-dashboard" class="nav-btn w-full flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800/40 hover:text-white transition-all text-xs font-bold text-right">
+                    <i class="fa-solid fa-chart-pie text-base text-slate-400 w-5"></i>
+                    <span>لوحة التحكم الرئيسية</span>
+                </button>
+                
+                <button onclick="switchTab('ai-settings')" id="btn-tab-ai-settings" class="nav-btn w-full flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800/40 hover:text-white transition-all text-xs font-bold text-right">
+                    <i class="fa-solid fa-brain text-base text-slate-400 w-5"></i>
+                    <span>إعدادات الذكاء الاصطناعي</span>
+                </button>
+
+                <button onclick="switchTab('crm-chat')" id="btn-tab-crm-chat" class="nav-btn w-full flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800/40 hover:text-white transition-all text-xs font-bold text-right">
+                    <i class="fa-solid fa-comments text-base text-slate-400 w-5"></i>
+                    <span>محادثات العملاء والـ CRM</span>
+                </button>
+
+                <button onclick="switchTab('broadcast')" id="btn-tab-broadcast" class="nav-btn w-full flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800/40 hover:text-white transition-all text-xs font-bold text-right">
+                    <i class="fa-solid fa-paper-plane text-base text-slate-400 w-5"></i>
+                    <span>الإرسال الجماعي (حملات)</span>
+                </button>
+
+                <button onclick="switchTab('keywords')" id="btn-tab-keywords" class="nav-btn w-full flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800/40 hover:text-white transition-all text-xs font-bold text-right">
+                    <i class="fa-solid fa-tags text-base text-slate-400 w-5"></i>
+                    <span>الردود التلقائية (كلمات مفتاحية)</span>
+                </button>
+
+                <button onclick="switchTab('billing')" id="btn-tab-billing" class="nav-btn w-full flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800/40 hover:text-white transition-all text-xs font-bold text-right">
+                    <i class="fa-solid fa-credit-card text-base text-slate-400 w-5"></i>
+                    <span>الاشتراكات والفوترة</span>
+                </button>
+            </nav>
+
+            <!-- Bottom Connected Profile Card -->
+            <div id="sidebar-profile" class="p-4 border-t border-slate-800/40 bg-slate-900/20">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <div id="side-avatar-container" class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 border border-slate-700 font-bold">
+                        WA
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p id="side-user-name" class="text-xs font-bold text-white truncate">حساب الواتساب</p>
+                        <p id="side-user-phone" class="text-[10px] text-slate-400 truncate">غير متصل</p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Bottom Navigation (Mobile View) -->
+        <nav class="flex md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950/90 border-t border-slate-800/80 backdrop-blur-lg justify-around items-center z-50 px-2">
+            <button onclick="switchTab('dashboard')" id="mob-tab-dashboard" class="flex flex-col items-center justify-center text-slate-400 hover:text-white transition-all flex-1 py-1">
+                <i class="fa-solid fa-chart-pie text-lg"></i>
+                <span class="text-[9px] font-bold mt-1">الرئيسية</span>
             </button>
-        </div>
+            <button onclick="switchTab('ai-settings')" id="mob-tab-ai-settings" class="flex flex-col items-center justify-center text-slate-400 hover:text-white transition-all flex-1 py-1">
+                <i class="fa-solid fa-brain text-lg"></i>
+                <span class="text-[9px] font-bold mt-1">الذكاء</span>
+            </button>
+            <button onclick="switchTab('crm-chat')" id="mob-tab-crm-chat" class="flex flex-col items-center justify-center text-slate-400 hover:text-white transition-all flex-1 py-1 relative">
+                <i class="fa-solid fa-comments text-lg"></i>
+                <span class="text-[9px] font-bold mt-1">المحادثات</span>
+            </button>
+            <button onclick="switchTab('broadcast')" id="mob-tab-broadcast" class="flex flex-col items-center justify-center text-slate-400 hover:text-white transition-all flex-1 py-1">
+                <i class="fa-solid fa-paper-plane text-lg"></i>
+                <span class="text-[9px] font-bold mt-1">الحملات</span>
+            </button>
+            <button onclick="switchTab('billing')" id="mob-tab-billing" class="flex flex-col items-center justify-center text-slate-400 hover:text-white transition-all flex-1 py-1">
+                <i class="fa-solid fa-credit-card text-lg"></i>
+                <span class="text-[9px] font-bold mt-1">الترقية</span>
+            </button>
+        </nav>
 
-        <!-- Connection Status Card -->
-        <div id="status-card" class="glass-card rounded-2xl p-5 flex flex-col items-center justify-center text-center space-y-4 relative overflow-hidden transition-all duration-500">
-            <div id="status-glow-bg" class="absolute -inset-10 bg-gradient-to-r opacity-5 blur-2xl transition-all duration-500"></div>
+        <!-- Main Content Area -->
+        <main class="flex-1 md:pr-64 min-h-screen px-4 py-6 md:p-8 overflow-y-auto">
             
-            <div class="relative z-10">
-                <div id="status-badge" class="px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide flex items-center justify-center space-x-2 space-x-reverse">
-                    <span class="w-2 h-2 rounded-full animate-ping"></span>
-                    <span id="status-text">جاري فحص الاتصال...</span>
+            <!-- Global Top Bar -->
+            <div class="flex items-center justify-between mb-8 pb-4 border-b border-slate-800/30">
+                <div>
+                    <h2 id="current-tab-title" class="text-xl font-extrabold text-white">لوحة التحكم الرئيسية</h2>
+                    <p class="text-xs text-slate-400">إدارة البوت والربط التلقائي والذكاء الاصطناعي</p>
                 </div>
-            </div>
-            
-            <div id="status-icon-container" class="w-20 h-20 rounded-full flex items-center justify-center text-4xl relative z-10 transition-all duration-500">
-                <i id="status-icon" class="fa-solid fa-circle-notch animate-spin text-slate-500"></i>
-            </div>
-
-            <div class="space-y-1 relative z-10">
-                <h2 id="status-title" class="text-base font-bold">جاري الاستعلام...</h2>
-                <p id="status-desc" class="text-xs text-slate-400 px-4">يرجى الانتظار لحين جلب البيانات من الخادم.</p>
-            </div>
-
-            <!-- Action buttons inside status card (like disconnect) -->
-            <div id="status-actions" class="w-full pt-2 hidden relative z-10">
-                <button onclick="disconnectDevice()" class="w-full py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 hover:border-transparent font-semibold text-sm transition-all duration-300">
-                    <i class="fa-solid fa-power-off ml-2"></i>قطع الاتصال ومسح الجلسة
-                </button>
-            </div>
-        </div>
-
-        <!-- Connection Stats Grid -->
-        <div id="stats-container" class="grid grid-cols-3 gap-3 hidden transition-all duration-500">
-            <div class="glass-card rounded-2xl p-3 text-center space-y-1">
-                <span class="text-indigo-400 text-base"><i class="fa-solid fa-envelope-open-text"></i></span>
-                <h4 class="text-[9px] text-slate-400 uppercase tracking-wider">الرسائل الواردة</h4>
-                <p id="stat-received" class="text-sm font-bold text-slate-200">0</p>
-            </div>
-            <div class="glass-card rounded-2xl p-3 text-center space-y-1">
-                <span class="text-emerald-400 text-base"><i class="fa-solid fa-robot"></i></span>
-                <h4 class="text-[9px] text-slate-400 uppercase tracking-wider">الردود الذكية</h4>
-                <p id="stat-replied" class="text-sm font-bold text-slate-200">0</p>
-            </div>
-            <div class="glass-card rounded-2xl p-3 text-center space-y-1">
-                <span class="text-amber-400 text-base"><i class="fa-solid fa-microphone-lines"></i></span>
-                <h4 class="text-[9px] text-slate-400 uppercase tracking-wider">الردود الصوتية</h4>
-                <p id="stat-voice" class="text-sm font-bold text-slate-200">0</p>
-            </div>
-        </div>
-
-        <!-- Connection Handler (QR / Pairing) -->
-        <div id="connect-handler-card" class="glass-card rounded-2xl p-5 space-y-4 hidden transition-all duration-500">
-            <h3 class="text-sm font-bold border-b border-slate-800 pb-2 flex items-center">
-                <i class="fa-solid fa-link ml-2 text-indigo-400"></i> خيارات الربط والتفعيل
-            </h3>
-
-            <!-- QR Container -->
-            <div id="qr-container" class="hidden flex flex-col items-center justify-center space-y-4 py-4">
-                <div class="p-3 bg-white rounded-2xl shadow-xl shadow-black/40">
-                    <img id="qr-image" src="" alt="WhatsApp QR Code" class="w-48 h-48 transition-opacity duration-300 opacity-0">
-                </div>
-                <div class="text-center space-y-1">
-                    <p class="text-xs text-indigo-300 font-semibold">توليد رمز QR حقيقي بنجاح</p>
-                    <p class="text-[11px] text-slate-400 px-6">افتح واتساب هاتفك -> الأجهزة المرتبطة -> ربط جهاز -> امسح الرمز.</p>
-                </div>
-            </div>
-
-            <!-- Navigation buttons when QR is not active -->
-            <div id="connect-options" class="grid grid-cols-2 gap-3">
-                <button onclick="requestQR()" class="py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-lg shadow-indigo-600/20 flex flex-col items-center justify-center space-y-1">
-                    <i class="fa-solid fa-qrcode text-lg mb-1"></i>
-                    <span>توليد رمز QR</span>
-                </button>
-                <button onclick="togglePairingForm(true)" class="py-3 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 text-slate-300 font-semibold text-xs transition-all flex flex-col items-center justify-center space-y-1">
-                    <i class="fa-solid fa-mobile-screen-button text-lg mb-1"></i>
-                    <span>ربط برقم الهاتف</span>
-                </button>
-            </div>
-
-            <!-- Pairing Form Container -->
-            <div id="pairing-form-container" class="hidden space-y-3 pt-2">
-                <div class="flex items-center justify-between">
-                    <label class="text-xs font-semibold text-slate-400">أدخل رقم الهاتف مع كود الدولة:</label>
-                    <button onclick="togglePairingForm(false)" class="text-xs text-indigo-400 hover:underline">إلغاء</button>
-                </div>
-                <div class="flex space-x-2 space-x-reverse">
-                    <input id="pair-phone" type="text" placeholder="+201234567890" dir="ltr" class="flex-1 bg-slate-900/80 border border-slate-700/50 rounded-xl px-3 py-2 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 text-center font-mono">
-                    <button onclick="generatePairingCode()" class="px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition-all">
-                        توليد الكود
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <button onclick="checkStatus(true)" class="p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 transition-all">
+                        <i id="refresh-icon" class="fa-solid fa-arrows-rotate text-sm text-slate-300"></i>
                     </button>
                 </div>
-                <div id="pairing-code-display" class="hidden p-4 rounded-xl bg-indigo-950/20 border border-indigo-500/20 text-center space-y-2">
-                    <p class="text-xs text-slate-400">أدخل كود الربط التالي في تطبيق الواتساب:</p>
-                    <p id="pairing-code-text" class="text-2xl font-bold tracking-widest text-indigo-300 font-mono select-all"></p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Config (AI Auto-Reply) Card -->
-        <div id="config-card" class="glass-card rounded-2xl p-5 space-y-4 transition-all duration-500">
-            <h3 class="text-sm font-bold border-b border-slate-800 pb-2 flex items-center">
-                <i class="fa-solid fa-brain ml-2 text-indigo-400"></i> إعدادات الرد التلقائي الذكي
-            </h3>
-
-            <!-- AI Auto Reply Switch -->
-            <div class="flex items-center justify-between py-1">
-                <div class="space-y-1">
-                    <h4 class="text-xs font-semibold">تفعيل مجيب الذكاء الاصطناعي 🧠</h4>
-                    <p class="text-[11px] text-slate-400">الرد الآلي على أي رسالة تصلك على حساب الواتساب.</p>
-                </div>
-                <label class="relative inline-flex items-center cursor-pointer">
-                    <input id="toggle-ai" type="checkbox" onchange="updateConfig()" class="sr-only peer custom-switch">
-                    <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:-translate-x-full after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-slate-400 peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                </label>
             </div>
 
-            <!-- Voice Reply Switch -->
-            <div class="flex items-center justify-between py-1 border-t border-slate-800/40 pt-3">
-                <div class="space-y-1">
-                    <h4 class="text-xs font-semibold">إرسال الرد كـ رسالة صوتية (Voice Note) 🎙️</h4>
-                    <p class="text-[11px] text-slate-400">توليف الصوت باللهجة المصرية وقراءته بصوت طبيعي.</p>
+            <!-- ============================== -->
+            <!-- 1. DASHBOARD TAB SECTION       -->
+            <!-- ============================== -->
+            <section id="tab-dashboard" class="tab-content space-y-6">
+                <!-- Top Warning if not connected -->
+                <div id="conn-warning-banner" class="hidden p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-bold flex items-center space-x-3 space-x-reverse">
+                    <i class="fa-solid fa-triangle-exclamation text-base"></i>
+                    <span>جهاز الواتساب الخاص بك غير متصل حالياً. لن يتم تفعيل خدمات الرد التلقائي وحملات الإرسال إلا بعد الربط.</span>
                 </div>
-                <label class="relative inline-flex items-center cursor-pointer">
-                    <input id="toggle-voice" type="checkbox" onchange="updateConfig()" class="sr-only peer custom-switch">
-                    <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:-translate-x-full after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-slate-400 peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                </label>
-            </div>
 
-            <!-- Transcribe Switch -->
-            <div class="flex items-center justify-between py-1 border-t border-slate-800/40 pt-3">
-                <div class="space-y-1">
-                    <h4 class="text-xs font-semibold">تحويل الرسائل الصوتية الواردة إلى نصوص 📝</h4>
-                    <p class="text-[11px] text-slate-400">استخدام Groq Whisper لتحويل الفويسات المستلمة إلى نصوص.</p>
-                </div>
-                <label class="relative inline-flex items-center cursor-pointer">
-                    <input id="toggle-transcribe" type="checkbox" onchange="updateConfig()" class="sr-only peer custom-switch">
-                    <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:-translate-x-full after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-slate-400 peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                </label>
-            </div>
+                <!-- Connection status card & Stats grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Status Card -->
+                    <div id="status-card" class="glass-card rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-5 relative overflow-hidden transition-all duration-500 glow-indigo">
+                        <div id="status-glow-bg" class="absolute -inset-10 bg-gradient-to-r opacity-5 blur-2xl transition-all duration-500"></div>
+                        
+                        <div class="relative z-10">
+                            <div id="status-badge" class="px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide flex items-center justify-center space-x-2 space-x-reverse">
+                                <span class="w-2 h-2 rounded-full animate-ping bg-indigo-500"></span>
+                                <span id="status-text">جاري فحص الاتصال...</span>
+                            </div>
+                        </div>
+                        
+                        <div id="status-icon-container" class="w-24 h-24 rounded-full flex items-center justify-center text-4xl relative z-10 transition-all duration-500">
+                            <i id="status-icon" class="fa-solid fa-circle-notch animate-spin text-slate-500"></i>
+                        </div>
 
-            <!-- Vision Switch -->
-            <div class="flex items-center justify-between py-1 border-t border-slate-800/40 pt-3">
-                <div class="space-y-1">
-                    <h4 class="text-xs font-semibold">تحليل الصور الواردة بالذكاء الاصطناعي 🖼️</h4>
-                    <p class="text-[11px] text-slate-400">تحليل ووصف أي صورة يتم إرسالها إليك على الواتساب تلقائياً.</p>
-                </div>
-                <label class="relative inline-flex items-center cursor-pointer">
-                    <input id="toggle-vision" type="checkbox" onchange="updateConfig()" class="sr-only peer custom-switch">
-                    <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:-translate-x-full after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-slate-400 peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                </label>
-            </div>
-        </div>
+                        <div class="space-y-1.5 relative z-10">
+                            <h2 id="status-title" class="text-base font-black text-white">جاري الاستعلام...</h2>
+                            <p id="status-desc" class="text-xs text-slate-400 px-4">يرجى الانتظار لحين جلب البيانات من الخادم.</p>
+                        </div>
 
-        <!-- Live Console Logs Card -->
-        <div class="glass-card rounded-2xl p-5 space-y-3">
-            <h3 class="text-sm font-bold border-b border-slate-800 pb-2 flex items-center justify-between">
-                <span><i class="fa-solid fa-terminal ml-2 text-indigo-400"></i> سجل الأحداث المباشر (Live Logs)</span>
-                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            </h3>
-            <div id="logs-container" class="h-40 overflow-y-auto space-y-1.5 pr-1 font-mono text-[10px] text-slate-300 leading-relaxed">
-                <p class="text-slate-500 text-center py-12">لا توجد أحداث مسجلة بعد...</p>
-            </div>
-        </div>
+                        <div id="status-actions" class="w-full pt-2 hidden relative z-10">
+                            <button onclick="disconnectDevice()" class="w-full py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/20 hover:border-transparent font-semibold text-xs transition-all duration-300">
+                                <i class="fa-solid fa-power-off ml-2"></i>قطع الاتصال ومسح الجلسة
+                            </button>
+                        </div>
+                    </div>
 
-        <!-- Quick Test Message Card -->
-        <div id="test-card" class="glass-card rounded-2xl p-5 space-y-4 transition-all duration-500">
-            <h3 class="text-sm font-bold border-b border-slate-800 pb-2 flex items-center">
-                <i class="fa-solid fa-paper-plane ml-2 text-indigo-400"></i> اختبار إرسال رسالة سريعة
-            </h3>
-            <div class="space-y-3">
-                <div>
-                    <label class="text-[11px] text-slate-400 block mb-1">رقم المستلم (مع كود الدولة):</label>
-                    <input id="test-to" type="text" placeholder="201234567890@s.whatsapp.net" dir="ltr" class="w-full bg-slate-900/80 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500">
+                    <!-- Pairing Options / QR container (only when not connected) -->
+                    <div id="connect-handler-card" class="glass-card rounded-2xl p-6 space-y-4 lg:col-span-2 hidden">
+                        <h3 class="text-sm font-extrabold text-white border-b border-slate-800 pb-3 flex items-center">
+                            <i class="fa-solid fa-link ml-2 text-indigo-400"></i> خيارات ربط الحساب وتفعيله
+                        </h3>
+
+                        <!-- QR Code Area -->
+                        <div id="qr-container" class="hidden flex flex-col items-center justify-center space-y-4 py-2">
+                            <div class="p-3 bg-white rounded-2xl shadow-xl shadow-black/40">
+                                <img id="qr-image" src="" alt="WhatsApp QR Code" class="w-44 h-44 transition-opacity duration-300 opacity-0">
+                            </div>
+                            <div class="text-center space-y-1">
+                                <p class="text-xs text-indigo-400 font-bold">تم توليد رمز QR بنجاح</p>
+                                <p class="text-[10px] text-slate-400 max-w-xs px-4">افتح واتساب هاتفك -> الأجهزة المرتبطة -> ربط جهاز -> امسح الرمز.</p>
+                            </div>
+                        </div>
+
+                        <div id="connect-options" class="grid grid-cols-2 gap-4">
+                            <button onclick="requestQR()" class="py-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-600/20 flex flex-col items-center justify-center space-y-2">
+                                <i class="fa-solid fa-qrcode text-xl"></i>
+                                <span>توليد رمز QR</span>
+                            </button>
+                            <button onclick="togglePairingForm(true)" class="py-4 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 text-slate-300 font-bold text-xs transition-all flex flex-col items-center justify-center space-y-2">
+                                <i class="fa-solid fa-mobile-screen-button text-xl"></i>
+                                <span>ربط برقم الهاتف</span>
+                            </button>
+                        </div>
+
+                        <!-- Pairing Code Form -->
+                        <div id="pairing-form-container" class="hidden space-y-3 pt-2">
+                            <div class="flex items-center justify-between">
+                                <label class="text-xs font-bold text-slate-400">أدخل رقم الهاتف مع رمز الدولة:</label>
+                                <button onclick="togglePairingForm(false)" class="text-xs text-indigo-400 hover:underline">إلغاء</button>
+                            </div>
+                            <div class="flex space-x-2 space-x-reverse">
+                                <input id="pair-phone" type="text" placeholder="+201234567890" dir="ltr" class="flex-1 bg-slate-900/80 border border-slate-700/50 rounded-xl px-4 py-2.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 text-center font-mono">
+                                <button onclick="generatePairingCode()" class="px-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all">
+                                    توليد الكود
+                                </button>
+                            </div>
+                            <div id="pairing-code-display" class="hidden p-4 rounded-xl bg-indigo-950/20 border border-indigo-500/20 text-center space-y-2">
+                                <p class="text-xs text-slate-400">أدخل كود الربط التالي في تطبيق الواتساب:</p>
+                                <p id="pairing-code-text" class="text-2xl font-bold tracking-widest text-indigo-300 font-mono select-all"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Statistics grid (when connected) -->
+                    <div id="stats-grid" class="lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div class="glass-card rounded-2xl p-5 flex flex-col items-center justify-center text-center space-y-2 border-r-4 border-indigo-500">
+                            <span class="text-indigo-400 text-2xl"><i class="fa-solid fa-envelope-open-text"></i></span>
+                            <h4 class="text-[10px] text-slate-400 uppercase tracking-wider font-bold">الرسائل المستلمة</h4>
+                            <p id="stat-received" class="text-xl font-black text-white">0</p>
+                        </div>
+                        <div class="glass-card rounded-2xl p-5 flex flex-col items-center justify-center text-center space-y-2 border-r-4 border-emerald-500">
+                            <span class="text-emerald-400 text-2xl"><i class="fa-solid fa-robot"></i></span>
+                            <h4 class="text-[10px] text-slate-400 uppercase tracking-wider font-bold">الردود الذكية</h4>
+                            <p id="stat-replied" class="text-xl font-black text-white">0</p>
+                        </div>
+                        <div class="glass-card rounded-2xl p-5 flex flex-col items-center justify-center text-center space-y-2 border-r-4 border-amber-500">
+                            <span class="text-amber-400 text-2xl"><i class="fa-solid fa-microphone-lines"></i></span>
+                            <h4 class="text-[10px] text-slate-400 uppercase tracking-wider font-bold">الردود الصوتية</h4>
+                            <p id="stat-voice" class="text-xl font-black text-white">0</p>
+                        </div>
+                        <div class="glass-card rounded-2xl p-5 flex flex-col items-center justify-center text-center space-y-2 border-r-4 border-rose-500">
+                            <span class="text-rose-400 text-2xl"><i class="fa-solid fa-paper-plane"></i></span>
+                            <h4 class="text-[10px] text-slate-400 uppercase tracking-wider font-bold">رسائل الحملات</h4>
+                            <p id="stat-campaign" class="text-xl font-black text-white">0</p>
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    <label class="text-[11px] text-slate-400 block mb-1">نص الرسالة:</label>
-                    <textarea id="test-msg" placeholder="أدخل نص الرسالة للاختبار..." class="w-full h-16 bg-slate-900/80 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 resize-none"></textarea>
+
+                <!-- Traffic Chart Dashboard -->
+                <div class="glass-card rounded-2xl p-6 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-black text-white flex items-center">
+                            <i class="fa-solid fa-chart-line ml-2 text-indigo-400"></i> معدل استهلاك الذكاء الاصطناعي اليومي
+                        </h3>
+                        <span class="text-[10px] text-slate-400">تحديث تلقائي</span>
+                    </div>
+                    <div class="h-44 w-full flex items-end justify-between pt-4 pb-2 px-2 border-b border-slate-800">
+                        <!-- Simulated Chart Bars (SVG or Flex Layout CSS) -->
+                        <div class="flex flex-col items-center space-y-2 w-[12%]">
+                            <div class="w-full bg-slate-800 rounded-t-lg h-16"></div>
+                            <span class="text-[9px] text-slate-500">الأحد</span>
+                        </div>
+                        <div class="flex flex-col items-center space-y-2 w-[12%]">
+                            <div class="w-full bg-slate-800 rounded-t-lg h-24"></div>
+                            <span class="text-[9px] text-slate-500">الاثنين</span>
+                        </div>
+                        <div class="flex flex-col items-center space-y-2 w-[12%]">
+                            <div class="w-full bg-indigo-500/30 border-t border-indigo-500 rounded-t-lg h-36 relative glow-indigo">
+                                <span class="absolute -top-6 left-1/2 transform -translate-x-1/2 text-[9px] text-indigo-400 font-bold">142</span>
+                            </div>
+                            <span class="text-[9px] text-slate-500">الثلاثاء</span>
+                        </div>
+                        <div class="flex flex-col items-center space-y-2 w-[12%]">
+                            <div class="w-full bg-slate-800 rounded-t-lg h-20"></div>
+                            <span class="text-[9px] text-slate-500">الأربعاء</span>
+                        </div>
+                        <div class="flex flex-col items-center space-y-2 w-[12%]">
+                            <div class="w-full bg-slate-800 rounded-t-lg h-28"></div>
+                            <span class="text-[9px] text-slate-500">الخميس</span>
+                        </div>
+                        <div class="flex flex-col items-center space-y-2 w-[12%]">
+                            <div class="w-full bg-emerald-500/30 border-t border-emerald-500 rounded-t-lg h-40 relative glow-green">
+                                <span class="absolute -top-6 left-1/2 transform -translate-x-1/2 text-[9px] text-emerald-400 font-bold">185</span>
+                            </div>
+                            <span class="text-[9px] text-slate-500">الجمعة</span>
+                        </div>
+                        <div class="flex flex-col items-center space-y-2 w-[12%]">
+                            <div class="w-full bg-indigo-600 rounded-t-lg h-32 relative glow-indigo"></div>
+                            <span class="text-[9px] text-indigo-400 font-bold">اليوم</span>
+                        </div>
+                    </div>
                 </div>
-                <button onclick="sendTestMessage()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition-all">
-                    إرسال الآن
-                </button>
-            </div>
-        </div>
-        
+
+                <!-- Live Logs Card -->
+                <div class="glass-card rounded-2xl p-6 space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h3 class="text-sm font-black text-white flex items-center">
+                            <i class="fa-solid fa-terminal ml-2 text-indigo-400"></i> سجل الأحداث المباشر (Live Console)
+                        </h3>
+                        <div class="flex items-center space-x-1.5 space-x-reverse">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span class="text-[10px] text-slate-400 font-mono">سيرفر نشط</span>
+                        </div>
+                    </div>
+                    <div id="logs-container" class="h-44 overflow-y-auto space-y-2 pr-1 font-mono text-[10px] text-slate-300 leading-relaxed custom-scroll">
+                        <p class="text-slate-500 text-center py-12">لا توجد أحداث مسجلة بعد...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================== -->
+            <!-- 2. AI SETTINGS TAB SECTION     -->
+            <!-- ============================== -->
+            <section id="tab-ai-settings" class="tab-content space-y-6 hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    <!-- Left: Switches and Sliders -->
+                    <div class="glass-card rounded-2xl p-6 space-y-5 lg:col-span-2">
+                        <h3 class="text-sm font-black text-white border-b border-slate-800 pb-3 flex items-center">
+                            <i class="fa-solid fa-sliders ml-2 text-indigo-400"></i> خيارات محرك الذكاء الاصطناعي
+                        </h3>
+
+                        <!-- AI Auto Reply Toggle -->
+                        <div class="flex items-center justify-between py-2">
+                            <div class="space-y-1">
+                                <h4 class="text-xs font-bold text-white">تفعيل مجيب الذكاء الاصطناعي 🧠</h4>
+                                <p class="text-[10px] text-slate-400 max-w-sm">الرد الآلي على أي رسالة تصلك على حساب الواتساب.</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input id="toggle-ai" type="checkbox" onchange="updateAIConfig()" class="sr-only peer">
+                                <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:-translate-x-full after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-slate-400 peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                            </label>
+                        </div>
+
+                        <!-- Voice Reply Switch -->
+                        <div class="flex items-center justify-between py-2 border-t border-slate-800/40 pt-4">
+                            <div class="space-y-1">
+                                <h4 class="text-xs font-bold text-white">إرسال الرد كرسالة صوتية (Voice Note) 🎙️</h4>
+                                <p class="text-[10px] text-slate-400 max-w-sm">تحويل الرد النصي إلى مقطع صوتي باستخدام نموذج TTS باللهجة المختارة.</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input id="toggle-voice" type="checkbox" onchange="updateAIConfig()" class="sr-only peer">
+                                <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:-translate-x-full after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-slate-400 peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                            </label>
+                        </div>
+
+                        <!-- Voice Type Selector -->
+                        <div class="grid grid-cols-2 gap-4 border-t border-slate-800/40 pt-4">
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">لهجة الصوت المستخدم (TTS Accent):</label>
+                                <select id="tts-voice" onchange="updateAIConfig()" class="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                                    <option value="egyptian-male">مصري - شاكر (ذكر)</option>
+                                    <option value="egyptian-female">مصري - سلمى (أنثى)</option>
+                                    <option value="ar-SA-HamedNeural">سعودي - حامد (ذكر)</option>
+                                    <option value="ar-SA-ZariyahNeural">سعودي - زارية (أنثى)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">النموذج اللغوي (LLM Model):</label>
+                                <select id="selected-model" onchange="updateAIConfig()" class="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                                    <option value="llama-3.3-70b-versatile">Llama 3.3 70B (افتراضي)</option>
+                                    <option value="llama-3.2-11b-vision-preview">Llama 3.2 11B (رؤية وصور)</option>
+                                    <option value="llama-3.1-8b-instant">Llama 3.1 8B (سريع وخفيف)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Transcribe Toggle -->
+                        <div class="flex items-center justify-between py-2 border-t border-slate-800/40 pt-4">
+                            <div class="space-y-1">
+                                <h4 class="text-xs font-bold text-white">تحويل الرسائل الصوتية الواردة إلى نصوص 📝</h4>
+                                <p class="text-[10px] text-slate-400 max-w-sm">استخدام Groq Whisper لتحليل وترجمة الفويسات المستلمة وقراءتها.</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input id="toggle-transcribe" type="checkbox" onchange="updateAIConfig()" class="sr-only peer">
+                                <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:-translate-x-full after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-slate-400 peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                            </label>
+                        </div>
+
+                        <!-- Vision Switch -->
+                        <div class="flex items-center justify-between py-2 border-t border-slate-800/40 pt-4">
+                            <div class="space-y-1">
+                                <h4 class="text-xs font-bold text-white">تحليل الصور الواردة بالذكاء الاصطناعي 🖼️</h4>
+                                <p class="text-[10px] text-slate-400 max-w-sm">تحليل ووصف أي صورة يتم إرسالها إليك على الواتساب تلقائياً.</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input id="toggle-vision" type="checkbox" onchange="updateAIConfig()" class="sr-only peer">
+                                <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:-translate-x-full after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-slate-400 peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                            </label>
+                        </div>
+
+                        <!-- Temperature Slider -->
+                        <div class="border-t border-slate-800/40 pt-4 space-y-2">
+                            <div class="flex justify-between items-center text-xs">
+                                <label class="text-slate-400">درجة الحرارة / الإبداع (Temperature):</label>
+                                <span id="temp-val" class="font-bold text-indigo-400">0.7</span>
+                            </div>
+                            <input id="temperature" type="range" min="0" max="1" step="0.1" value="0.7" oninput="document.getElementById('temp-val').innerText = this.value" onchange="updateAIConfig()" class="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+                            <div class="flex justify-between text-[9px] text-slate-500">
+                                <span>دقيق ومحدد (0)</span>
+                                <span>إبداعي وعشوائي (1)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Prompt Editor & Presets -->
+                    <div class="glass-card rounded-2xl p-6 space-y-4">
+                        <h3 class="text-sm font-black text-white border-b border-slate-800 pb-3 flex items-center">
+                            <i class="fa-solid fa-user-gear ml-2 text-indigo-400"></i> تحديد دور وشخصية البوت
+                        </h3>
+
+                        <div>
+                            <label class="text-[11px] text-slate-400 block mb-1">قوالب أدوار جاهزة (Presets):</label>
+                            <select id="prompt-presets" onchange="applyPromptPreset(this.value)" class="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                                <option value="">اختر قالب لتطبيقه...</option>
+                                <option value="sales">مستشار مبيعات وتسويق عقاري 🏢</option>
+                                <option value="support">دعم فني وخدمة عملاء متجر إلكتروني 📦</option>
+                                <option value="clinic">منسق حجوزات عيادة طبية 🩺</option>
+                                <option value="psychologist">مساعد نفسي ومستمع ودود 🧠</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="text-[11px] text-slate-400 block mb-1">التوجيه البرمجي للذكاء الاصطناعي (System Prompt):</label>
+                            <textarea id="system-prompt" rows="8" placeholder="اكتب التوجيه هنا..." class="w-full bg-slate-900/80 border border-slate-700/50 rounded-xl px-3 py-2.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 resize-none custom-scroll leading-relaxed"></textarea>
+                        </div>
+
+                        <!-- API Keys Section -->
+                        <div class="border-t border-slate-800/40 pt-4 space-y-3">
+                            <h4 class="text-xs font-bold text-slate-300">مفاتيح API مخصصة (اختياري)</h4>
+                            <div>
+                                <label class="text-[10px] text-slate-400 block mb-1">مفتاح API لـ Groq الخاص بك:</label>
+                                <input id="api-groq" type="password" placeholder="sk_groq_..." class="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-700 focus:outline-none focus:border-indigo-500 font-mono">
+                            </div>
+                        </div>
+
+                        <button onclick="saveFullAIConfig()" class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-600/20">
+                            حفظ وتطبيق التغييرات
+                        </button>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- ============================== -->
+            <!-- 3. CRM & LIVE CHAT SECTION     -->
+            <!-- ============================== -->
+            <section id="tab-crm-chat" class="tab-content hidden">
+                <div class="glass-card rounded-2xl overflow-hidden border border-slate-800/40 flex flex-col md:flex-row h-[75vh]">
+                    
+                    <!-- Contacts Sidebar -->
+                    <div class="w-full md:w-80 border-l border-slate-800/40 flex flex-col h-1/3 md:h-full bg-slate-950/20">
+                        <div class="p-4 border-b border-slate-800/40">
+                            <div class="relative">
+                                <span class="absolute inset-y-0 right-3 flex items-center text-slate-500">
+                                    <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                                </span>
+                                <input id="contact-search" type="text" placeholder="البحث في جهات الاتصال..." class="w-full bg-slate-900 border border-slate-700/50 rounded-xl pr-9 pl-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500">
+                            </div>
+                        </div>
+                        
+                        <!-- Contact List container -->
+                        <div id="contacts-list" class="flex-1 overflow-y-auto divide-y divide-slate-800/30 custom-scroll">
+                            <p class="text-slate-500 text-center py-12 text-xs">لا توجد محادثات نشطة حالياً</p>
+                        </div>
+                    </div>
+
+                    <!-- Chat Window Area -->
+                    <div class="flex-1 flex flex-col h-2/3 md:h-full">
+                        <!-- Chat Header -->
+                        <div id="chat-header" class="px-6 py-4 border-b border-slate-800/40 flex items-center justify-between bg-slate-950/10">
+                            <div class="flex items-center space-x-3 space-x-reverse">
+                                <div id="chat-avatar" class="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 text-xs font-bold font-mono">
+                                    C
+                                </div>
+                                <div>
+                                    <h4 id="chat-contact-name" class="text-xs font-extrabold text-white">اختر محادثة</h4>
+                                    <p id="chat-contact-phone" class="text-[10px] text-slate-400">يرجى تحديد جهة اتصال لبدء الدردشة الحية والـ CRM</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Chat Messages Container -->
+                        <div id="chat-messages" class="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-950/30 custom-scroll">
+                            <div class="flex flex-col items-center justify-center h-full text-center space-y-3">
+                                <span class="w-16 h-16 rounded-full bg-indigo-500/5 text-indigo-400 flex items-center justify-center text-2xl border border-indigo-500/10"><i class="fa-solid fa-comments"></i></span>
+                                <div class="space-y-1">
+                                    <h4 class="text-xs font-bold text-white">دردشة العملاء الحية</h4>
+                                    <p class="text-[10px] text-slate-400 px-12">يمكنك هنا تصفح سجل الرسائل بين العميل والبوت، والتدخل بالرد يدوياً في أي وقت.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Chat Input Box -->
+                        <div id="chat-input-container" class="p-4 border-t border-slate-800/40 bg-slate-950/20 hidden">
+                            <div class="flex items-center space-x-2 space-x-reverse">
+                                <textarea id="chat-message-input" rows="1" placeholder="اكتب ردك للعميل هنا..." class="flex-1 bg-slate-900 border border-slate-700/50 rounded-xl px-4 py-2.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 resize-none max-h-24 custom-scroll leading-relaxed" onkeydown="handleChatInputKey(event)"></textarea>
+                                <button onclick="sendManualMessage()" class="w-10 h-10 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl flex items-center justify-center text-sm transition-all shrink-0 shadow-lg shadow-indigo-600/10">
+                                    <i class="fa-solid fa-paper-plane"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- ============================== -->
+            <!-- 4. BROADCAST TAB SECTION       -->
+            <!-- ============================== -->
+            <section id="tab-broadcast" class="tab-content space-y-6 hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    <!-- Left: Campaign Settings -->
+                    <div class="glass-card rounded-2xl p-6 space-y-4 lg:col-span-2">
+                        <h3 class="text-sm font-black text-white border-b border-slate-800 pb-3 flex items-center">
+                            <i class="fa-solid fa-paper-plane ml-2 text-indigo-400"></i> إعداد وتجهيز حملة الإرسال
+                        </h3>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">قائمة الأرقام المستهدفة (افصل بينها بفاصة أو سطر جديد):</label>
+                                <textarea id="broadcast-numbers" rows="6" placeholder="201234567890&#10;201098765432&#10;..." dir="ltr" class="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-700 focus:outline-none focus:border-indigo-500 resize-none custom-scroll leading-relaxed font-mono"></textarea>
+                            </div>
+                            
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">محتوى نص الرسالة:</label>
+                                <textarea id="broadcast-message" rows="5" placeholder="أهلاً بك يا عميلنا العزيز..." class="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 resize-none custom-scroll leading-relaxed"></textarea>
+                            </div>
+
+                            <!-- Safety Delay -->
+                            <div class="space-y-2">
+                                <div class="flex justify-between items-center text-xs">
+                                    <label class="text-slate-400">فاصل الأمان الزمني بين كل إرسال (لتجنب الحظر):</label>
+                                    <span id="delay-val" class="font-bold text-indigo-400">5 ثوانٍ</span>
+                                </div>
+                                <input id="broadcast-delay" type="range" min="3" max="30" step="1" value="5" oninput="document.getElementById('delay-val').innerText = this.value + ' ثوانٍ'" class="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+                            </div>
+
+                            <button onclick="startBroadcast()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-indigo-600/20">
+                                <i class="fa-solid fa-play ml-1"></i> إطلاق حملة الإرسال الآن
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Right: Campaign Monitor -->
+                    <div class="glass-card rounded-2xl p-6 space-y-5 flex flex-col justify-between">
+                        <div>
+                            <h3 class="text-sm font-black text-white border-b border-slate-800 pb-3 flex items-center">
+                                <i class="fa-solid fa-chart-simple ml-2 text-indigo-400"></i> مراقب الحملة الجارية
+                            </h3>
+                            
+                            <!-- Idle State -->
+                            <div id="campaign-idle" class="py-12 text-center space-y-3">
+                                <span class="w-12 h-12 rounded-full bg-slate-800/60 text-slate-400 flex items-center justify-center mx-auto text-xl"><i class="fa-solid fa-circle-play"></i></span>
+                                <p class="text-xs text-slate-500">لا توجد حملات إرسال جماعي جارية حالياً.</p>
+                            </div>
+
+                            <!-- Running State -->
+                            <div id="campaign-active" class="hidden py-4 space-y-4">
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-slate-400 font-bold">حالة الإرسال:</span>
+                                    <span id="campaign-status" class="px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 font-semibold animate-pulse">جاري العمل</span>
+                                </div>
+
+                                <!-- Progress bar -->
+                                <div class="space-y-1">
+                                    <div class="flex justify-between text-[10px] text-slate-400 font-bold">
+                                        <span>نسبة التقدم</span>
+                                        <span id="campaign-progress-text">0 / 0</span>
+                                    </div>
+                                    <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                                        <div id="campaign-progress-bar" class="h-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-300" style="width: 0%"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Stats Counters -->
+                                <div class="grid grid-cols-2 gap-3 pt-2">
+                                    <div class="p-3 bg-slate-900/50 border border-slate-800/40 rounded-xl text-center space-y-1">
+                                        <h4 class="text-[9px] text-slate-400 font-bold">تم إرسالها</h4>
+                                        <p id="campaign-sent-count" class="text-lg font-black text-emerald-400">0</p>
+                                    </div>
+                                    <div class="p-3 bg-slate-900/50 border border-slate-800/40 rounded-xl text-center space-y-1">
+                                        <h4 class="text-[9px] text-slate-400 font-bold">فشلت</h4>
+                                        <p id="campaign-failed-count" class="text-lg font-black text-rose-400">0</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Button inside active monitor -->
+                        <div id="campaign-active-actions" class="hidden pt-4 border-t border-slate-800/40">
+                            <button onclick="cancelBroadcast()" class="w-full py-2.5 bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/20 hover:border-transparent rounded-xl text-xs font-bold transition-all">
+                                <i class="fa-solid fa-stop ml-1"></i> إيقاف الحملة فورا
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- ============================== -->
+            <!-- 5. KEYWORDS TAB SECTION        -->
+            <!-- ============================== -->
+            <section id="tab-keywords" class="tab-content space-y-6 hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    <!-- Left: Add New Keyword Rule -->
+                    <div class="glass-card rounded-2xl p-6 space-y-4">
+                        <h3 class="text-sm font-black text-white border-b border-slate-800 pb-3 flex items-center">
+                            <i class="fa-solid fa-square-plus ml-2 text-indigo-400"></i> إضافة قاعدة رد تلقائي جديدة
+                        </h3>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">الكلمة المفتاحية المستهدفة (Trigger Keyword):</label>
+                                <input id="new-keyword" type="text" placeholder="مثال: سعر" class="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500">
+                            </div>
+                            
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">الرد الثابت التلقائي (Static Response):</label>
+                                <textarea id="new-response" rows="5" placeholder="أدخل نص الرد التلقائي..." class="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 resize-none custom-scroll leading-relaxed"></textarea>
+                                <p class="text-[9px] text-slate-500 mt-1 leading-relaxed">ملاحظة: سيتم التحقق من هذه الكلمات أولاً والرد بها بشكل فوري قبل تشغيل محرك الذكاء الاصطناعي لتوفير الاستهلاك وتأكيد دقة الأجوبة الحساسة.</p>
+                            </div>
+
+                            <button onclick="addKeywordRule()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-600/20">
+                                إضافة وتطبيق القاعدة
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Right: Existing Rules Grid -->
+                    <div class="glass-card rounded-2xl p-6 space-y-4 lg:col-span-2">
+                        <h3 class="text-sm font-black text-white border-b border-slate-800 pb-3 flex items-center">
+                            <i class="fa-solid fa-list-check ml-2 text-indigo-400"></i> القواعد والردود التلقائية النشطة
+                        </h3>
+                        
+                        <div class="overflow-x-auto custom-scroll">
+                            <table class="w-full text-right text-xs">
+                                <thead class="bg-slate-900/50 text-slate-400 uppercase text-[10px] font-bold border-b border-slate-800">
+                                    <tr>
+                                        <th class="py-3 px-4 rounded-r-xl">الكلمة المفتاحية</th>
+                                        <th class="py-3 px-4">الرد الآلي المحدد</th>
+                                        <th class="py-3 px-4 rounded-l-xl text-center">خيارات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="keywords-rules-tbody" class="divide-y divide-slate-800/30">
+                                    <tr>
+                                        <td colspan="3" class="py-8 text-center text-slate-500">لا توجد قواعد رد مضافة حالياً.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- ============================== -->
+            <!-- 6. BILLING & UPGRADE SECTION   -->
+            <!-- ============================== -->
+            <section id="tab-billing" class="tab-content space-y-6 hidden">
+                <!-- Current Subscription Header -->
+                <div class="glass-card rounded-2xl p-6 bg-gradient-to-tr from-indigo-950/20 via-slate-900/40 to-slate-900/40 border-r-4 border-indigo-500 glow-indigo flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+                    <div class="space-y-1">
+                        <span class="text-[10px] text-indigo-400 font-bold uppercase tracking-wider bg-indigo-500/10 px-2 py-0.5 rounded-full">تفاصيل الاشتراك النشط</span>
+                        <h3 class="text-base font-black text-white flex items-center">
+                            باقة الأعمال الاحترافية (Enterprise VIP PRO) 👑
+                        </h3>
+                        <p class="text-xs text-slate-400">تجديد الاشتراك القادم في: 11 يونيو 2027 (متبقي 365 يوم)</p>
+                    </div>
+                    <div class="flex items-center space-x-6 space-x-reverse">
+                        <div class="text-center md:text-left">
+                            <span class="text-[10px] text-slate-400 block">استهلاك الرسائل الشهرية</span>
+                            <span class="text-sm font-black text-indigo-400">4,850 / 10,000</span>
+                        </div>
+                        <button onclick="openPaymentModal()" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-600/20">
+                            ترقية باقة الاستهلاك
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Pricing Plans Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+                    
+                    <!-- Free Plan -->
+                    <div class="glass-card rounded-2xl p-6 flex flex-col justify-between space-y-6 border border-slate-800/40 opacity-70">
+                        <div class="space-y-4">
+                            <div class="space-y-1">
+                                <h4 class="text-sm font-bold text-slate-300">الباقة الأساسية (Free)</h4>
+                                <p class="text-[10px] text-slate-500">مناسبة للتجربة والاستخدام الشخصي البسيط</p>
+                            </div>
+                            <div class="flex items-baseline">
+                                <span class="text-2xl font-black text-white">0$</span>
+                                <span class="text-[10px] text-slate-500 mr-1">/ شهرياً</span>
+                            </div>
+                            <ul class="space-y-2 text-xs text-slate-400 pt-2 border-t border-slate-800/50">
+                                <li class="flex items-center"><i class="fa-solid fa-check text-indigo-500 ml-2"></i> ربط حساب واتساب واحد</li>
+                                <li class="flex items-center"><i class="fa-solid fa-check text-indigo-500 ml-2"></i> حد أقصى 500 رسالة / شهر</li>
+                                <li class="flex items-center"><i class="fa-solid fa-check text-indigo-500 ml-2"></i> الردود بالذكاء الاصطناعي</li>
+                            </ul>
+                        </div>
+                        <button disabled class="w-full py-2 bg-slate-800 text-slate-500 rounded-xl text-xs font-bold cursor-not-allowed">تم التخطي</button>
+                    </div>
+
+                    <!-- Business Plan (Current) -->
+                    <div class="glass-card rounded-2xl p-6 flex flex-col justify-between space-y-6 border-2 border-indigo-500/50 relative glow-indigo scale-105 z-10">
+                        <span class="absolute -top-3 right-6 px-3 py-1 bg-indigo-500 text-white font-black text-[9px] rounded-full uppercase tracking-wider">باقتك الحالية</span>
+                        <div class="space-y-4">
+                            <div class="space-y-1">
+                                <h4 class="text-sm font-bold text-white">باقة الأعمال (PRO Business)</h4>
+                                <p class="text-[10px] text-indigo-300">الأكثر طلباً للشركات الصغيرة والمتوسطة</p>
+                            </div>
+                            <div class="flex items-baseline">
+                                <span class="text-2xl font-black text-white">49$</span>
+                                <span class="text-[10px] text-slate-400 mr-1">/ شهرياً</span>
+                            </div>
+                            <ul class="space-y-2 text-xs text-slate-300 pt-2 border-t border-indigo-500/10">
+                                <li class="flex items-center"><i class="fa-solid fa-check text-indigo-400 ml-2"></i> ربط حسابين واتساب</li>
+                                <li class="flex items-center"><i class="fa-solid fa-check text-indigo-400 ml-2"></i> حد 10,000 رسالة / شهر</li>
+                                <li class="flex items-center"><i class="fa-solid fa-check text-indigo-400 ml-2"></i> ردود صوتية و Whisper تلقائي</li>
+                                <li class="flex items-center"><i class="fa-solid fa-check text-indigo-400 ml-2"></i> لوحة تحكم CRM متكاملة</li>
+                                <li class="flex items-center"><i class="fa-solid fa-check text-indigo-400 ml-2"></i> حملات الإرسال الجماعي البسيطة</li>
+                            </ul>
+                        </div>
+                        <button onclick="switchTab('dashboard')" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all">تصفح لوحة التحكم</button>
+                    </div>
+
+                    <!-- Unlimited Premium Plan -->
+                    <div class="glass-card rounded-2xl p-6 flex flex-col justify-between space-y-6 border border-slate-800/40">
+                        <div class="space-y-4">
+                            <div class="space-y-1">
+                                <h4 class="text-sm font-bold text-slate-200">الباقة اللامحدودة (VIP Enterprise)</h4>
+                                <p class="text-[10px] text-slate-500">للشركات الكبرى والمسوقين المحترفين</p>
+                            </div>
+                            <div class="flex items-baseline">
+                                <span class="text-2xl font-black text-white">99$</span>
+                                <span class="text-[10px] text-slate-500 mr-1">/ شهرياً</span>
+                            </div>
+                            <ul class="space-y-2 text-xs text-slate-400 pt-2 border-t border-slate-800/50">
+                                <li class="flex items-center"><i class="fa-solid fa-check text-indigo-500 ml-2"></i> ربط أجهزة غير محدود</li>
+                                <li class="flex items-center"><i class="fa-solid fa-check text-indigo-500 ml-2"></i> رسائل غير محدودة شهرياً</li>
+                                <li class="flex items-center"><i class="fa-solid fa-check text-indigo-500 ml-2"></i> دعم فني مخصص VIP 24/7</li>
+                                <li class="flex items-center"><i class="fa-solid fa-check text-indigo-500 ml-2"></i> API مفتوح للربط مع الأنظمة الخارجية</li>
+                                <li class="flex items-center"><i class="fa-solid fa-check text-indigo-500 ml-2"></i> خادم استضافة مخصص وسريع جداً</li>
+                            </ul>
+                        </div>
+                        <button onclick="openPaymentModal()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-all">ترقية الباقة الآن</button>
+                    </div>
+
+                </div>
+            </section>
+
+        </main>
     </div>
 
-    <script>
-        // Check initial status on load
-        document.addEventListener('DOMContentLoaded', () => {
-            checkStatus();
-            // Start periodic polling every 4 seconds
-            setInterval(checkStatus, 4000);
-        });
+    <!-- ============================== -->
+    <!-- PAYMENT CHECKOUT MODAL MOCKUP  -->
+    <!-- ============================== -->
+    <div id="payment-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+        <div class="glass-card rounded-3xl w-full max-w-md p-6 space-y-6 relative overflow-hidden transition-all duration-300 transform scale-95 opacity-0" id="payment-modal-box">
+            
+            <!-- Close Button -->
+            <button onclick="closePaymentModal()" class="absolute top-4 left-4 text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
 
+            <div class="text-center space-y-1">
+                <h3 class="text-base font-black text-white">ترقية الاشتراك والدفع الآمن</h3>
+                <p class="text-[10px] text-slate-400">أدخل بيانات بطاقتك لتأكيد ترقية الباقة لـ VIP Enterprise</p>
+            </div>
+
+            <!-- Virtual Credit Card Design -->
+            <div class="w-full h-44 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-700 to-violet-800 p-5 flex flex-col justify-between text-white shadow-xl shadow-indigo-900/30 relative">
+                <div class="flex justify-between items-start">
+                    <span class="text-xs font-bold tracking-widest uppercase">VIP BUSINESS CARD</span>
+                    <i class="fa-brands fa-cc-visa text-3xl"></i>
+                </div>
+                <div class="space-y-3">
+                    <!-- Card Number Display -->
+                    <p id="card-num-display" class="text-lg font-bold tracking-widest font-mono text-center select-all">•••• •••• •••• ••••</p>
+                    <div class="flex justify-between text-[10px] font-mono uppercase">
+                        <div>
+                            <span class="text-[8px] text-indigo-300 block">صاحب البطاقة</span>
+                            <span id="card-holder-display" class="font-bold">JOHN DOE</span>
+                        </div>
+                        <div class="text-left">
+                            <span class="text-[8px] text-indigo-300 block font-sans">تاريخ الانتهاء</span>
+                            <span id="card-expiry-display" class="font-bold">MM/YY</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Checkout Form Fields -->
+            <div class="space-y-3">
+                <div>
+                    <label class="text-[10px] text-slate-400 block mb-1">اسم صاحب البطاقة (اسم افتراضي):</label>
+                    <input id="pay-holder" type="text" placeholder="John Doe" oninput="document.getElementById('card-holder-display').innerText = this.value.toUpperCase() || 'JOHN DOE'" class="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 uppercase">
+                </div>
+                <div>
+                    <label class="text-[10px] text-slate-400 block mb-1">رقم بطاقة الدفع (16 رقم):</label>
+                    <input id="pay-card" type="text" placeholder="4000 1234 5678 9010" maxlength="19" oninput="formatCardNumber(this)" class="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 font-mono">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-[10px] text-slate-400 block mb-1">تاريخ الانتهاء (MM/YY):</label>
+                        <input id="pay-expiry" type="text" placeholder="12/28" maxlength="5" oninput="formatExpiry(this)" class="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 font-mono text-center">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-slate-400 block mb-1">كود الأمان (CVV):</label>
+                        <input id="pay-cvv" type="password" placeholder="***" maxlength="3" class="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 font-mono text-center">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Button / Checkout animation state -->
+            <button onclick="submitPaymentForm()" id="pay-submit-btn" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-indigo-600/20">
+                <i class="fa-solid fa-lock ml-1 text-[10px]"></i> تأكيد دفع 99$ الآن
+            </button>
+
+            <!-- Success Checkmark state inside modal -->
+            <div id="payment-success-box" class="hidden flex flex-col items-center justify-center py-6 text-center space-y-4">
+                <div class="w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center text-3xl animate-bounce">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+                <div class="space-y-1">
+                    <h4 class="text-sm font-black text-white">تم تفعيل الاشتراك الذهبي بنجاح!</h4>
+                    <p class="text-[10px] text-slate-400 px-4">تم ترقية حسابك وتفعيل السعة غير المحدودة. شكراً لثقتكم بنا!</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ============================== -->
+    <!-- DYNAMIC JAVASCRIPT PANEL LOGIC -->
+    <!-- ============================== -->
+    <script>
         let isPolling = false;
         let qrActive = false;
+        let currentTab = 'dashboard';
+        let currentChatJid = '';
+        let chatPollInterval = null;
+        let keywordsList = [];
 
+        // Tab routing definition
+        const TAB_TITLES = {
+            'dashboard': 'لوحة التحكم الرئيسية',
+            'ai-settings': 'إعدادات الذكاء الاصطناعي',
+            'crm-chat': 'محادثات العملاء والـ CRM',
+            'broadcast': 'الإرسال الجماعي (حملات)',
+            'keywords': 'الردود التلقائية (كلمات مفتاحية)',
+            'billing': 'الاشتراكات والفوترة'
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check state on load
+            checkStatus();
+            loadAIConfig();
+            loadKeywords();
+            
+            // Periodic background updates
+            setInterval(checkStatus, 3000);
+            
+            // Initial Active Button Styling
+            styleTabButton(currentTab);
+        });
+
+        // Toggle Tab routing
+        function switchTab(tabId) {
+            currentTab = tabId;
+            document.getElementById('current-tab-title').innerText = TAB_TITLES[tabId];
+            
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            
+            // Show requested tab
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            
+            styleTabButton(tabId);
+
+            // Special actions on tab load
+            if (tabId === 'crm-chat') {
+                loadChatsList();
+                startChatPolling();
+            } else {
+                stopChatPolling();
+            }
+
+            if (tabId === 'broadcast') {
+                checkCampaignStatus();
+            }
+        }
+
+        function styleTabButton(tabId) {
+            // Reset styles for all buttons
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.className = "nav-btn w-full flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800/40 hover:text-white transition-all text-xs font-bold text-right";
+                btn.querySelector('i').className = btn.querySelector('i').className.replace('text-indigo-400', 'text-slate-400');
+            });
+            
+            // Mobile styling resets
+            document.querySelectorAll('[id^="mob-tab-"]').forEach(btn => {
+                btn.className = "flex flex-col items-center justify-center text-slate-400 hover:text-white transition-all flex-1 py-1";
+            });
+
+            // Set active classes
+            const desktopBtn = document.getElementById(`btn-tab-${tabId}`);
+            if (desktopBtn) {
+                desktopBtn.className = "nav-btn w-full flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl bg-indigo-500/10 text-indigo-400 transition-all text-xs font-black text-right border-r-4 border-indigo-500 shadow-md";
+                desktopBtn.querySelector('i').className = desktopBtn.querySelector('i').className.replace('text-slate-400', 'text-indigo-400');
+            }
+
+            const mobileBtn = document.getElementById(`mob-tab-${tabId}`);
+            if (mobileBtn) {
+                mobileBtn.className = "flex flex-col items-center justify-center text-indigo-400 hover:text-indigo-300 transition-all flex-1 py-1 border-t-2 border-indigo-500";
+            }
+        }
+
+        // Periodic state verification from backend
         async function checkStatus(force = false) {
             if (isPolling && !force) return;
             isPolling = true;
@@ -276,33 +959,28 @@
             if (force) refreshIcon.classList.add('animate-spin');
 
             try {
-                // Fetch connection status
                 const res = await fetch('/status');
                 const data = await res.json();
                 
-                // Fetch config
-                const configRes = await fetch('/config');
-                const configData = await configRes.json();
-                
-                // Update UI based on connection
                 updateConnectionUI(data);
+
+                // Update switches if on settings tab
+                if (currentTab === 'dashboard') {
+                    renderLogs(data.logs);
+                }
                 
-                // Update Switches
-                document.getElementById('toggle-ai').checked = !!configData.ai_auto_reply;
-                document.getElementById('toggle-voice').checked = !!configData.ai_voice_reply;
-                document.getElementById('toggle-transcribe').checked = !!configData.ai_transcribe_voice;
-                document.getElementById('toggle-vision').checked = !!configData.ai_image_vision;
-                
-                // Manage QR display
+                // If campaign active, update campaign dashboard status
+                if (data.campaign && data.campaign.running) {
+                    updateCampaignDashboard(data.campaign);
+                }
+
+                // If QR is required
                 if (data.state !== 'CONNECTED' && data.qr) {
                     showQR();
                 } else {
                     hideQR();
                 }
 
-                // Render Live Logs
-                renderLogs(data.logs);
-                
             } catch (err) {
                 console.error("Error in status check:", err);
                 updateConnectionUI({ state: 'ERROR' });
@@ -323,11 +1001,11 @@
             const statusDesc = document.getElementById('status-desc');
             const statusActions = document.getElementById('status-actions');
             const connectHandlerCard = document.getElementById('connect-handler-card');
-            const testCard = document.getElementById('test-card');
-            const statsContainer = document.getElementById('stats-container');
+            const statsGrid = document.getElementById('stats-grid');
+            const connWarning = document.getElementById('conn-warning-banner');
 
-            // Reset classes
-            statusCard.className = "glass-card rounded-2xl p-5 flex flex-col items-center justify-center text-center space-y-4 relative overflow-hidden transition-all duration-500";
+            // Reset connections UI styles
+            statusCard.className = "glass-card rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-5 relative overflow-hidden transition-all duration-500";
             statusBadge.className = "px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide flex items-center justify-center space-x-2 space-x-reverse";
             
             const glowBg = document.getElementById('status-glow-bg');
@@ -342,37 +1020,48 @@
                 statusBadge.querySelector('span').className = "w-2 h-2 rounded-full bg-emerald-500 animate-ping";
                 statusBadge.querySelector('span:last-child').innerText = "متصل";
                 
-                // Avatar Rendering
+                // Avatar update
                 if (user.avatar) {
-                    statusIconContainer.className = "w-20 h-20 rounded-full relative z-10 transition-all duration-500 glow-green";
-                    statusIconContainer.innerHTML = `<img src="${user.avatar}" alt="Avatar" class="w-full h-full rounded-full border-2 border-emerald-500 object-cover">`;
+                    statusIconContainer.className = "w-24 h-24 rounded-full relative z-10 transition-all duration-500 glow-green border-2 border-emerald-500";
+                    statusIconContainer.innerHTML = `<img src="${user.avatar}" alt="Avatar" class="w-full h-full rounded-full object-cover">`;
+                    document.getElementById('side-avatar-container').innerHTML = `<img src="${user.avatar}" alt="Avatar" class="w-full h-full rounded-full object-cover">`;
                 } else {
                     const initial = user.name.charAt(0).toUpperCase();
-                    statusIconContainer.className = "w-20 h-20 rounded-full bg-emerald-500/10 border-2 border-emerald-500 flex items-center justify-center text-emerald-500 font-bold text-3xl relative z-10 transition-all duration-500 glow-green";
+                    statusIconContainer.className = "w-24 h-24 rounded-full bg-emerald-500/10 border-2 border-emerald-500 flex items-center justify-center text-emerald-400 font-black text-4xl relative z-10 transition-all duration-500 glow-green";
                     statusIconContainer.innerHTML = initial;
+                    document.getElementById('side-avatar-container').innerText = initial;
                 }
                 
                 glowBg.classList.add('from-emerald-500', 'to-teal-500');
                 
                 statusActions.classList.remove('hidden');
                 connectHandlerCard.classList.add('hidden');
-                testCard.classList.remove('opacity-50', 'pointer-events-none');
+                statsGrid.classList.remove('opacity-50', 'pointer-events-none');
+                connWarning.classList.add('hidden');
 
-                // Render stats
-                statsContainer.classList.remove('hidden');
+                // Profile sidebar updates
+                document.getElementById('side-user-name').innerText = user.name;
+                document.getElementById('side-user-phone').innerText = `+${user.phone}`;
+
+                // Counters stats
                 if (data.stats) {
                     document.getElementById('stat-received').innerText = data.stats.messagesReceived || 0;
                     document.getElementById('stat-replied').innerText = data.stats.repliesSent || 0;
                     document.getElementById('stat-voice').innerText = data.stats.voiceRepliesSent || 0;
                 }
             } else {
-                // Not Connected / Connecting
-                statsContainer.classList.add('hidden');
-                statusIconContainer.className = "w-20 h-20 rounded-full flex items-center justify-center text-4xl relative z-10 transition-all duration-500";
-                
+                // Not Connected
+                statsGrid.classList.add('opacity-50', 'pointer-events-none');
+                statusIconContainer.className = "w-24 h-24 rounded-full flex items-center justify-center text-4xl relative z-10 transition-all duration-500";
+                connWarning.classList.remove('hidden');
+
+                document.getElementById('side-user-name').innerText = "حساب الواتساب";
+                document.getElementById('side-user-phone').innerText = "غير متصل";
+                document.getElementById('side-avatar-container').innerText = "WA";
+
                 if (state === 'DISCONNECTED') {
                     statusTitle.innerText = "غير متصل 🔴";
-                    statusDesc.innerText = "يرجى ربط حساب واتساب لتفعيل الجسر واستلام الرسائل.";
+                    statusDesc.innerText = "يرجى ربط حساب واتساب لتفعيل الجسر الذكي واستقبال محادثات الـ CRM.";
                     
                     statusBadge.classList.add('bg-rose-500/10', 'text-rose-400');
                     statusBadge.querySelector('span').className = "w-2 h-2 rounded-full bg-rose-500 animate-ping";
@@ -385,25 +1074,25 @@
                     
                     statusActions.classList.add('hidden');
                     connectHandlerCard.classList.remove('hidden');
-                    testCard.classList.add('opacity-50', 'pointer-events-none');
-                } else { // Connecting / Error
+                } else {
+                    // Connecting / Querying state
                     statusTitle.innerText = "جاري التحقق... ⏳";
-                    statusDesc.innerText = "يرجى الانتظار، جاري محاولة الاتصال بالخادم الرئيسي لباقة الواتساب.";
+                    statusDesc.innerText = "يرجى الانتظار، جاري محاولة الاتصال والتحقق من الجلسات النشطة.";
                     
                     statusBadge.classList.add('bg-amber-500/10', 'text-amber-400');
                     statusBadge.querySelector('span').className = "w-2 h-2 rounded-full bg-amber-500 animate-ping";
-                    statusBadge.querySelector('span:last-child').innerText = "اتصال";
+                    statusBadge.querySelector('span:last-child').innerText = "فحص الاتصال";
                     
                     statusIconContainer.classList.add('bg-amber-500/10', 'text-amber-500');
                     statusIconContainer.innerHTML = '<i class="fa-solid fa-circle-notch animate-spin text-amber-500"></i>';
                     
                     statusActions.classList.add('hidden');
                     connectHandlerCard.classList.add('hidden');
-                    testCard.classList.add('opacity-50', 'pointer-events-none');
                 }
             }
         }
 
+        // Render console live logs
         function renderLogs(logs) {
             const container = document.getElementById('logs-container');
             if (logs && logs.length > 0) {
@@ -417,7 +1106,7 @@
                     else if (log.type === 'warning') { color = 'text-amber-400'; icon = 'fa-triangle-exclamation'; }
                     else if (log.type === 'error') { color = 'text-red-400'; icon = 'fa-circle-xmark'; }
                     
-                    return `<div class="flex items-start space-x-2 space-x-reverse py-1 border-b border-slate-800/20 last:border-0">
+                    return `<div class="flex items-start space-x-2 space-x-reverse py-1.5 border-b border-slate-800/20 last:border-0">
                         <span class="text-slate-500 shrink-0 font-mono select-none">${log.timestamp}</span>
                         <span class="${color} shrink-0 mt-0.5"><i class="fa-solid ${icon}"></i></span>
                         <span class="text-slate-300 break-all leading-normal">${log.message}</span>
@@ -428,12 +1117,43 @@
             }
         }
 
-        async function updateConfig() {
+        // Load config settings
+        async function loadAIConfig() {
+            try {
+                const res = await fetch('/config');
+                const data = await res.json();
+                
+                document.getElementById('toggle-ai').checked = !!data.ai_auto_reply;
+                document.getElementById('toggle-voice').checked = !!data.ai_voice_reply;
+                document.getElementById('toggle-transcribe').checked = !!data.ai_transcribe_voice;
+                document.getElementById('toggle-vision').checked = !!data.ai_image_vision;
+                
+                if (data.system_prompt) document.getElementById('system-prompt').value = data.system_prompt;
+                if (data.selected_model) document.getElementById('selected-model').value = data.selected_model;
+                if (data.tts_voice) document.getElementById('tts-voice').value = data.tts_voice;
+                if (data.temperature !== undefined) {
+                    document.getElementById('temperature').value = data.temperature;
+                    document.getElementById('temp-val').innerText = data.temperature;
+                }
+                
+                if (data.api_keys && data.api_keys.groq) {
+                    document.getElementById('api-groq').value = data.api_keys.groq;
+                }
+            } catch (err) {
+                console.error("Failed to load configuration:", err);
+            }
+        }
+
+        // Fast update toggle switches
+        async function updateAIConfig() {
             const aiVal = document.getElementById('toggle-ai').checked;
             const voiceVal = document.getElementById('toggle-voice').checked;
             const transcribeVal = document.getElementById('toggle-transcribe').checked;
             const visionVal = document.getElementById('toggle-vision').checked;
-            
+            const voiceName = document.getElementById('tts-voice').value;
+            const modelName = document.getElementById('selected-model').value;
+            const tempVal = parseFloat(document.getElementById('temperature').value);
+
             try {
                 await fetch('/config', {
                     method: 'POST',
@@ -442,15 +1162,72 @@
                         ai_auto_reply: aiVal,
                         ai_voice_reply: voiceVal,
                         ai_transcribe_voice: transcribeVal,
-                        ai_image_vision: visionVal
+                        ai_image_vision: visionVal,
+                        tts_voice: voiceName,
+                        selected_model: modelName,
+                        temperature: tempVal
                     })
                 });
-                console.log("Config updated successfully.");
             } catch (err) {
                 console.error("Failed to update config:", err);
             }
         }
 
+        // Full prompt & key configuration save
+        async function saveFullAIConfig() {
+            const aiVal = document.getElementById('toggle-ai').checked;
+            const voiceVal = document.getElementById('toggle-voice').checked;
+            const transcribeVal = document.getElementById('toggle-transcribe').checked;
+            const visionVal = document.getElementById('toggle-vision').checked;
+            const voiceName = document.getElementById('tts-voice').value;
+            const modelName = document.getElementById('selected-model').value;
+            const tempVal = parseFloat(document.getElementById('temperature').value);
+            const prompt = document.getElementById('system-prompt').value.trim();
+            const groqKey = document.getElementById('api-groq').value.trim();
+
+            try {
+                const res = await fetch('/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ai_auto_reply: aiVal,
+                        ai_voice_reply: voiceVal,
+                        ai_transcribe_voice: transcribeVal,
+                        ai_image_vision: visionVal,
+                        tts_voice: voiceName,
+                        selected_model: modelName,
+                        temperature: tempVal,
+                        system_prompt: prompt,
+                        api_keys: {
+                            groq: groqKey
+                        }
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert("✅ تم حفظ إعدادات الذكاء الاصطناعي وتطبيقها بنجاح!");
+                }
+            } catch (err) {
+                alert("❌ فشل حفظ الإعدادات: " + err.message);
+            }
+        }
+
+        function applyPromptPreset(presetKey) {
+            const editor = document.getElementById('system-prompt');
+            const presets = {
+                'sales': 'أنت مستشار مبيعات خبير ومحترف لشركة عقارية كبرى. مهمتك هي الإجابة عن تساؤلات العملاء حول العقارات المتاحة، والأسعار، والمواقع بدقة وبمنتهى اللباقة والاحترافية. حافظ على إجابات مختصرة ومحفزة للعميل للتواصل الهاتفي وحجز موعد استشارة.',
+                'support': 'أنت مسؤول دعم فني وخدمة عملاء لمتجر إلكتروني. قم بالإجابة على استفسارات العملاء بخصوص تتبع الشحنات، وسياسة الاسترجاع والتبديل، ومشاكل الدفع بوضوح وصبر. حافظ على نبرة ودودة ومختصرة للغاية ومناسبة لرسائل الواتساب السريعة.',
+                'clinic': 'أنت منسق حجوزات ذكي ومساعد إداري لعيادة طبية تخصصية. قم بالإجابة على استفسارات المرضى حول مواعيد الأطباء، وتوافر الحجوزات، والتخصصات المتاحة بأسلوب احترافي ومطمئن. تجنب إعطاء أي نصائح طبية، ووجّه المريض لتحديد موعد الكشف.',
+                'psychologist': 'أنت مستمع ودود ومساعد نفسي داعم. استمع لمشاكل المستخدم ونقاشاته بتعاطف شديد، وقدّم له نصائح بسيطة وإيجابية تساعده على الهدوء والتفكير السليم. لا تقدم تشخيصات طبية سريرية، وحافظ على أسلوب هادئ وودود وخالٍ من الماركداون.'
+            };
+            if (presets[presetKey]) {
+                editor.value = presets[presetKey];
+            }
+        }
+
+        // ============================================
+        // QR & Pairing controls
+        // ============================================
         function showQR() {
             const qrContainer = document.getElementById('qr-container');
             const qrImage = document.getElementById('qr-image');
@@ -540,31 +1317,384 @@
             }
         }
 
-        async function sendTestMessage() {
-            const to = document.getElementById('test-to').value.trim();
-            const msg = document.getElementById('test-msg').value.trim();
-            
-            if (!to || !msg) {
-                alert("الرجاء تعبئة جميع حقول الاختبار");
-                return;
+        // ============================================
+        // CRM & Chat Logic
+        // ============================================
+        async function loadChatsList() {
+            try {
+                const res = await fetch('/chats');
+                const chats = await res.json();
+                const container = document.getElementById('contacts-list');
+                
+                if (chats && chats.length > 0) {
+                    container.innerHTML = chats.map(chat => {
+                        const isActive = chat.jid === currentChatJid ? 'neon-border-active bg-indigo-500/5' : '';
+                        const initial = chat.name.charAt(0).toUpperCase();
+                        
+                        return `<div onclick="selectChat('${chat.jid}', '${chat.name}', '${chat.phone}')" class="p-3.5 flex items-center space-x-3 space-x-reverse hover:bg-slate-800/20 cursor-pointer transition-all ${isActive}">
+                            <div class="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-slate-400 font-mono shrink-0">${initial}</div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex justify-between items-center">
+                                    <h5 class="text-xs font-bold text-slate-200 truncate">${chat.name}</h5>
+                                    <span class="text-[9px] text-slate-500 font-mono">${chat.timestamp}</span>
+                                </div>
+                                <p class="text-[10px] text-slate-400 truncate mt-0.5">${chat.lastMessage || 'لا توجد رسائل بعد'}</p>
+                            </div>
+                        </div>`;
+                    }).join('');
+                } else {
+                    container.innerHTML = '<p class="text-slate-500 text-center py-12 text-xs">لا توجد محادثات CRM نشطة حالياً</p>';
+                }
+            } catch (err) {
+                console.error("Failed to load chats list:", err);
             }
+        }
+
+        function selectChat(jid, name, phone) {
+            currentChatJid = jid;
+            
+            // Header updates
+            document.getElementById('chat-contact-name').innerText = name;
+            document.getElementById('chat-contact-phone').innerText = `+${phone}`;
+            document.getElementById('chat-avatar').innerText = name.charAt(0).toUpperCase();
+            
+            document.getElementById('chat-input-container').classList.remove('hidden');
+
+            loadChatsList(); // Re-render to show active indicator border
+            loadChatMessages();
+        }
+
+        async function loadChatMessages() {
+            if (!currentChatJid) return;
+            try {
+                const res = await fetch(`/chats/${currentChatJid}/messages`);
+                const messages = await res.json();
+                const container = document.getElementById('chat-messages');
+
+                if (messages && messages.length > 0) {
+                    container.innerHTML = messages.map(msg => {
+                        const fromMe = msg.fromMe;
+                        const cardAlign = fromMe ? 'justify-start flex-row-reverse' : 'justify-start';
+                        const bubbleColor = fromMe ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-slate-800 text-slate-100 rounded-bl-none';
+                        const timeAlign = fromMe ? 'text-left' : 'text-right';
+                        
+                        return `<div class="flex items-end space-x-2 space-x-reverse ${cardAlign}">
+                            <div class="max-w-[70%] space-y-1">
+                                <div class="p-3 rounded-2xl text-xs leading-relaxed ${bubbleColor} break-words whitespace-pre-wrap">${msg.text}</div>
+                                <p class="text-[8px] text-slate-500 ${timeAlign} font-mono px-1">${msg.timestamp}</p>
+                            </div>
+                        </div>`;
+                    }).join('');
+                    
+                    // Scroll to bottom
+                    container.scrollTop = container.scrollHeight;
+                } else {
+                    container.innerHTML = '<p class="text-slate-500 text-center py-12 text-xs">لا توجد رسائل مسجلة في هذا الشات</p>';
+                }
+            } catch (err) {
+                console.error("Failed to load messages:", err);
+            }
+        }
+
+        async function sendManualMessage() {
+            const input = document.getElementById('chat-message-input');
+            const message = input.value.trim();
+            if (!message || !currentChatJid) return;
 
             try {
-                const res = await fetch('/send', {
+                const res = await fetch(`/chats/${currentChatJid}/send`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ to: to, message: msg })
+                    body: JSON.stringify({ message: message })
                 });
                 const data = await res.json();
                 if (data.success) {
-                    alert("✅ تم إرسال الرسالة بنجاح!");
-                    document.getElementById('test-msg').value = "";
+                    input.value = '';
+                    loadChatMessages();
+                    loadChatsList();
                 } else {
-                    throw new Error(data.error || "خطأ غير معروف");
+                    throw new Error(data.error);
                 }
             } catch (err) {
-                alert("❌ فشل إرسال الرسالة: " + err.message);
+                alert("فشل إرسال الرسالة اليدوية: " + err.message);
             }
+        }
+
+        function handleChatInputKey(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendManualMessage();
+            }
+        }
+
+        function startChatPolling() {
+            stopChatPolling();
+            chatPollInterval = setInterval(() => {
+                loadChatMessages();
+                loadChatsList();
+            }, 2500);
+        }
+
+        function stopChatPolling() {
+            if (chatPollInterval) {
+                clearInterval(chatPollInterval);
+                chatPollInterval = null;
+            }
+        }
+
+        // ============================================
+        // Bulk Broadcast Logic
+        // ============================================
+        async function startBroadcast() {
+            const list = document.getElementById('broadcast-numbers').value.trim();
+            const message = document.getElementById('broadcast-message').value.trim();
+            const delay = parseInt(document.getElementById('broadcast-delay').value);
+
+            if (!list || !message) {
+                alert("الرجاء تعبئة قائمة الأرقام ونص الرسالة لإطلاق الحملة.");
+                return;
+            }
+
+            if (!confirm("هل أنت متأكد من رغبتك في إرسال هذه الحملة فوراً للعملاء؟")) return;
+
+            try {
+                const res = await fetch('/campaign/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ list, message, delay })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    alert("📢 تم إطلاق حملة الإرسال الجماعي بنجاح في الخلفية!");
+                    checkCampaignStatus();
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (err) {
+                alert("❌ فشل بدء الحملة: " + err.message);
+            }
+        }
+
+        async function checkCampaignStatus() {
+            try {
+                const res = await fetch('/campaign/status');
+                const data = await res.json();
+                updateCampaignDashboard(data);
+            } catch (err) {
+                console.error("Failed to fetch campaign status:", err);
+            }
+        }
+
+        function updateCampaignDashboard(campaign) {
+            const idleBox = document.getElementById('campaign-idle');
+            const activeBox = document.getElementById('campaign-active');
+            const actionsBox = document.getElementById('campaign-active-actions');
+
+            if (campaign.running) {
+                idleBox.classList.add('hidden');
+                activeBox.classList.remove('hidden');
+                actionsBox.classList.remove('hidden');
+
+                // Update Progress bar
+                const percent = Math.min(100, Math.round(((campaign.sent + campaign.failed) / campaign.total) * 100));
+                document.getElementById('campaign-progress-bar').style.width = percent + '%';
+                document.getElementById('campaign-progress-text').innerText = `${campaign.sent + campaign.failed} / ${campaign.total}`;
+                
+                document.getElementById('campaign-sent-count').innerText = campaign.sent;
+                document.getElementById('campaign-failed-count').innerText = campaign.failed;
+                
+                // Show statistics counter count too
+                document.getElementById('stat-campaign').innerText = campaign.sent;
+            } else {
+                idleBox.classList.remove('hidden');
+                activeBox.classList.add('hidden');
+                actionsBox.classList.add('hidden');
+                
+                if (campaign.total > 0) {
+                    document.getElementById('stat-campaign').innerText = campaign.sent;
+                }
+            }
+        }
+
+        async function cancelBroadcast() {
+            if (!confirm("هل أنت متأكد من رغبتك في إلغاء وإيقاف حملة الإرسال الجارية؟")) return;
+            try {
+                await fetch('/campaign/cancel', { method: 'POST' });
+                checkCampaignStatus();
+            } catch (err) {
+                alert("فشل إلغاء الحملة: " + err.message);
+            }
+        }
+
+        // ============================================
+        // Keywords Responders Logic
+        // ============================================
+        async function loadKeywords() {
+            try {
+                const res = await fetch('/keywords');
+                keywordsList = await res.json();
+                renderKeywordsTable();
+            } catch (err) {
+                console.error("Failed to load keywords:", err);
+            }
+        }
+
+        function renderKeywordsTable() {
+            const tbody = document.getElementById('keywords-rules-tbody');
+            if (keywordsList && keywordsList.length > 0) {
+                tbody.innerHTML = keywordsList.map((item, idx) => {
+                    return `<tr class="hover:bg-slate-800/10 transition-all border-b border-slate-800/20 last:border-0">
+                        <td class="py-3 px-4 font-bold text-indigo-400 font-mono">${item.keyword}</td>
+                        <td class="py-3 px-4 text-slate-300 max-w-sm truncate leading-relaxed">${item.response}</td>
+                        <td class="py-3 px-4 text-center">
+                            <button onclick="deleteKeywordRule(${idx})" class="w-8 h-8 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white transition-all text-xs">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>`;
+                }).join('');
+            } else {
+                tbody.innerHTML = '<tr><td colspan="3" class="py-8 text-center text-slate-500">لا توجد قواعد رد مضافة حالياً.</td></tr>';
+            }
+        }
+
+        async function addKeywordRule() {
+            const kw = document.getElementById('new-keyword').value.trim();
+            const resp = document.getElementById('new-response').value.trim();
+
+            if (!kw || !resp) {
+                alert("الرجاء تعبئة الكلمة المفتاحية ونص الرد التلقائي.");
+                return;
+            }
+
+            keywordsList.push({ keyword: kw, response: resp });
+
+            try {
+                const res = await fetch('/keywords', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keywords: keywordsList })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('new-keyword').value = '';
+                    document.getElementById('new-response').value = '';
+                    loadKeywords();
+                }
+            } catch (err) {
+                alert("فشل إضافة قاعدة الرد: " + err.message);
+            }
+        }
+
+        async function deleteKeywordRule(idx) {
+            if (!confirm("هل أنت متأكد من رغبتك في حذف قاعدة الرد التلقائي هذه؟")) return;
+            keywordsList.splice(idx, 1);
+
+            try {
+                const res = await fetch('/keywords', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keywords: keywordsList })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    loadKeywords();
+                }
+            } catch (err) {
+                alert("فشل حذف قاعدة الرد: " + err.message);
+            }
+        }
+
+        // ============================================
+        // Payment Checkout Modal Controls
+        // ============================================
+        function openPaymentModal() {
+            const modal = document.getElementById('payment-modal');
+            const box = document.getElementById('payment-modal-box');
+            
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                box.classList.remove('scale-95', 'opacity-0');
+                box.classList.add('scale-100', 'opacity-100');
+            }, 50);
+
+            // Reset modal states
+            document.getElementById('payment-success-box').classList.add('hidden');
+            document.getElementById('pay-holder').parentElement.parentElement.classList.remove('hidden');
+            document.getElementById('pay-submit-btn').classList.remove('hidden');
+        }
+
+        function closePaymentModal() {
+            const modal = document.getElementById('payment-modal');
+            const box = document.getElementById('payment-modal-box');
+            
+            box.classList.remove('scale-100', 'opacity-100');
+            box.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 250);
+        }
+
+        function formatCardNumber(input) {
+            let val = input.value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+            let matches = val.match(/\d{4,16}/g);
+            let match = matches && matches[0] || '';
+            let parts = [];
+
+            for (let i = 0, len = match.length; i < len; i += 4) {
+                parts.push(match.substring(i, i + 4));
+            }
+
+            if (parts.length > 0) {
+                input.value = parts.join(' ');
+                document.getElementById('card-num-display').innerText = parts.join(' ');
+            } else {
+                input.value = val;
+                document.getElementById('card-num-display').innerText = val || '•••• •••• •••• ••••';
+            }
+        }
+
+        function formatExpiry(input) {
+            let val = input.value.replace(/\D/g, '');
+            if (val.length >= 2) {
+                input.value = val.slice(0, 2) + '/' + val.slice(2, 4);
+                document.getElementById('card-expiry-display').innerText = input.value;
+            } else {
+                input.value = val;
+                document.getElementById('card-expiry-display').innerText = val || 'MM/YY';
+            }
+        }
+
+        function submitPaymentForm() {
+            const holder = document.getElementById('pay-holder').value.trim();
+            const card = document.getElementById('pay-card').value.trim();
+            const expiry = document.getElementById('pay-expiry').value.trim();
+            const cvv = document.getElementById('pay-cvv').value.trim();
+
+            if (!holder || card.length < 19 || expiry.length < 5 || cvv.length < 3) {
+                alert("الرجاء إدخال بيانات دفع صحيحة وكاملة لإجراء الترقية الافتراضية.");
+                return;
+            }
+
+            const btn = document.getElementById('pay-submit-btn');
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch animate-spin ml-2"></i>جاري معالجة الدفع الآمن...';
+            btn.disabled = true;
+
+            setTimeout(() => {
+                // Success screen switch
+                btn.classList.add('hidden');
+                document.getElementById('pay-holder').parentElement.parentElement.classList.add('hidden');
+                document.getElementById('payment-success-box').classList.remove('hidden');
+                
+                // Keep checkout open for a few seconds to let user view success, then close
+                setTimeout(() => {
+                    closePaymentModal();
+                    // Reset submit button state
+                    btn.innerHTML = '<i class="fa-solid fa-lock ml-1 text-[10px]"></i> تأكيد دفع 99$ الآن';
+                    btn.disabled = false;
+                }, 4000);
+            }, 2500);
         }
     </script>
 </body>

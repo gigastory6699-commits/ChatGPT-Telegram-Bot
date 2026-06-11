@@ -26,6 +26,182 @@ let profilePicUrl = null;
 let stats = { repliesSent: 0, voiceRepliesSent: 0, messagesReceived: 0 };
 let liveLogs = [];
 
+let db = { chats: {}, keywords: [], config: {}, campaign: { running: false, total: 0, sent: 0, failed: 0, list: [], message: "", delay: 5 } };
+
+function loadDb() {
+    try {
+        if (fs.existsSync('session/messages_db.json')) {
+            db = JSON.parse(fs.readFileSync('session/messages_db.json', 'utf-8'));
+        }
+    } catch (e) {
+        console.error("Failed to load db:", e.message);
+    }
+    // Default values
+    if (!db.chats) db.chats = {};
+    if (!db.keywords || db.keywords.length === 0) {
+        db.keywords = [
+            { keyword: "مرحبا", response: "أهلاً بك! كيف يمكنني مساعدتك اليوم؟" },
+            { keyword: "سعر", response: "سعر الاشتراك في باقتنا المميزة هو 99 دولار شهرياً شاملة الدعم الفني وتحديثات الذكاء الاصطناعي." }
+        ];
+    }
+    if (!db.config) db.config = {
+        system_prompt: "أنت مساعد ذكي ومحترف تجيب على رسائل الواتساب بدقة واختصار وباللغة العربية الفصحى. تجنب تماماً استخدام أي علامات تنسيق ماركداون (مثل ** أو * أو `) في إجابتك، واجعل الرد يبدو طبيعياً كرسالة واتساب عادية.",
+        selected_model: "llama-3.3-70b-versatile",
+        tts_voice: "egyptian-male",
+        temperature: 0.7,
+        api_keys: { groq: "", fal: "" }
+    };
+    if (!db.campaign) db.campaign = { running: false, total: 0, sent: 0, failed: 0, list: [], message: "", delay: 5 };
+}
+
+function saveDb() {
+    try {
+        if (!fs.existsSync('session')) {
+            fs.mkdirSync('session');
+        }
+        fs.writeFileSync('session/messages_db.json', JSON.stringify(db, null, 2));
+    } catch (e) {
+        console.error("Failed to save db:", e.message);
+    }
+}
+
+function logMessage(jid, fromMe, senderName, text) {
+    if (!jid || jid.endsWith('@g.us')) return; // ignore groups or empty JIDs
+    
+    if (!db.chats[jid]) {
+        db.chats[jid] = {
+            name: senderName || jid.split('@')[0],
+            phone: jid.split('@')[0],
+            lastMessage: text || '',
+            timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+            messages: []
+        };
+    }
+    db.chats[jid].lastMessage = text || '';
+    db.chats[jid].timestamp = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    if (senderName) {
+        db.chats[jid].name = senderName;
+    }
+    
+    db.chats[jid].messages.push({
+        id: Math.random().toString(36).substring(7),
+        fromMe: fromMe,
+        text: text || '',
+        timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
+    });
+    
+    if (db.chats[jid].messages.length > 50) {
+        db.chats[jid].messages.shift();
+    }
+    saveDb();
+}
+
+function checkKeywordResponders(text) {
+    if (!text) return null;
+    const cleanText = text.trim().toLowerCase();
+    for (const item of db.keywords) {
+        if (cleanText.includes(item.keyword.trim().toLowerCase())) {
+            return item.response;
+        }
+    }
+    return null;
+}
+
+let campaignInterval = null;
+
+function startCampaign(list, message, delaySeconds) {
+    if (db.campaign.running) {
+        return { success: false, error: "Campaign is already running" };
+    }
+    
+    const phoneList = list
+        .split(/[,\n]/)
+        .map(p => p.trim().replace(/[^0-9]/g, ''))
+        .filter(p => p.length >= 8);
+        
+    if (phoneList.length === 0) {
+        return { success: false, error: "No valid phone numbers provided" };
+    }
+    
+    db.campaign = {
+        running: true,
+        total: phoneList.length,
+        sent: 0,
+        failed: 0,
+        list: phoneList.map(num => `${num}@s.whatsapp.net`),
+        message: message,
+        delay: delaySeconds || 5
+    };
+    saveDb();
+    
+    addLog('info', `بدء حملة الإرسال الجماعي إلى ${db.campaign.total} جهة اتصال...`);
+    
+    let currentIndex = 0;
+    
+    async function sendNext() {
+        if (!db.campaign.running) {
+            if (campaignInterval) {
+                clearInterval(campaignInterval);
+                campaignInterval = null;
+            }
+            return;
+        }
+        
+        if (currentIndex >= db.campaign.list.length) {
+            db.campaign.running = false;
+            saveDb();
+            if (campaignInterval) {
+                clearInterval(campaignInterval);
+                campaignInterval = null;
+            }
+            addLog('success', `اكتملت حملة الإرسال الجماعي بنجاح! تم إرسال: ${db.campaign.sent}، فشل: ${db.campaign.failed}`);
+            return;
+        }
+        
+        const targetJid = db.campaign.list[currentIndex];
+        const targetNumber = targetJid.split('@')[0];
+        
+        try {
+            if (!sock || connectionState !== 'CONNECTED') {
+                throw new Error("WhatsApp disconnected during campaign");
+            }
+            
+            await sock.sendMessage(targetJid, { text: db.campaign.message });
+            db.campaign.sent++;
+            logMessage(targetJid, true, sock.user.name || 'مستشار المبيعات', db.campaign.message);
+            addLog('success', `تم الإرسال بنجاح إلى: +${targetNumber}`);
+        } catch (err) {
+            console.error(`Failed to send campaign to ${targetNumber}:`, err.message);
+            db.campaign.failed++;
+            addLog('error', `فشل الإرسال إلى: +${targetNumber} - ${err.message}`);
+        }
+        
+        currentIndex++;
+        saveDb();
+    }
+    
+    sendNext();
+    campaignInterval = setInterval(sendNext, (delaySeconds || 5) * 1000);
+    return { success: true, total: db.campaign.total };
+}
+
+function cancelCampaign() {
+    if (campaignInterval) {
+        clearInterval(campaignInterval);
+        campaignInterval = null;
+    }
+    if (db.campaign.running) {
+        db.campaign.running = false;
+        saveDb();
+        addLog('warning', "تم إيقاف حملة الإرسال الجماعي بواسطة المسؤول.");
+        return { success: true };
+    }
+    return { success: false, error: "No active campaign to cancel" };
+}
+
+// Load database immediately
+loadDb();
+
 function addLog(type, message) {
     const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
     liveLogs.unshift({ timestamp, type, message });
@@ -77,59 +253,93 @@ function escapeHtml(str) {
         .replace(/>/g, "&gt;");
 }
 
-async function getAIResponse(userMessage, base64Image = null) {
-    const groqKey = process.env.GROQ_API_KEY;
+async function getAIResponse(senderJid, userMessage, base64Image = null) {
+    const groqKey = (db.config.api_keys && db.config.api_keys.groq) || process.env.GROQ_API_KEY;
     
     if (!groqKey) {
-        console.error("GROQ_API_KEY not found in environment variables.");
+        console.error("GROQ_API_KEY not found in environment variables or config.");
         return null;
     }
 
     try {
         let messages = [];
+        const systemPrompt = db.config.system_prompt || "أنت مساعد ذكي ومحترف تجيب على رسائل الواتساب بدقة واختصار وباللغة العربية الفصحى. تجنب تماماً استخدام أي علامات تنسيق ماركداون (مثل ** أو * أو `) في إجابتك، واجعل الرد يبدو طبيعياً كرسالة واتساب عادية.";
+        const model = base64Image ? "llama-3.2-11b-vision-preview" : (db.config.selected_model || "llama-3.3-70b-versatile");
+        const temp = db.config.temperature !== undefined ? parseFloat(db.config.temperature) : 0.7;
+
+        // 1. إضافة توجيه النظام (System Prompt)
+        messages.push({
+            role: "system",
+            content: base64Image ? systemPrompt + " وأنت تستطيع رؤية الصور وتحليلها بدقة واختصار." : systemPrompt
+        });
+
+        // 2. تحميل الذاكرة وتاريخ المحادثة من قاعدة البيانات المحلية للـ CRM
+        if (senderJid && db.chats[senderJid] && db.chats[senderJid].messages) {
+            // جلب آخر 12 رسالة كحد أقصى لتمثيل الذاكرة الفعالة
+            const history = db.chats[senderJid].messages;
+            const historyMessages = history.slice(-12).map(m => {
+                let role = m.fromMe ? "assistant" : "user";
+                let textContent = m.text || "";
+                
+                // تنظيف رسائل الفويسات والصوتيات من الدلائل الخاصة
+                let cleanContent = textContent
+                    .replace(/^🎙️ \[رد صوتي\] /, "")
+                    .replace(/^🎙️ \[رد صوتي تلقائي\] /, "")
+                    .replace(/^🎙️ \[فويس مترجم\]: /, "");
+                    
+                return {
+                    role: role,
+                    content: cleanContent
+                };
+            }).filter(m => m.content.length > 0);
+
+            messages.push(...historyMessages);
+        }
+
+        // 3. إضافة الرسالة الحالية
         if (base64Image) {
-            console.log("Generating AI response with Groq Vision...");
-            messages = [
-                {
-                    role: "system",
-                    content: "أنت مساعد ذكي ومحترف تجيب على رسائل الواتساب وتستطيع رؤية الصور وتحليلها بدقة واختصار وباللغة العربية الفصحى. تجنب تماماً استخدام أي علامات تنسيق ماركداون (مثل ** أو * أو `) في إجابتك."
-                },
-                {
-                    role: "user",
-                    content: [
-                        {
-                            type: "text",
-                            text: userMessage || "صف هذه الصورة بالتفصيل."
-                        },
-                        {
-                            type: "image_url",
-                            image_url: {
-                                url: `data:image/jpeg;base64,${base64Image}`
-                            }
+            // للتأكد من عدم تكرار الرسالة إذا كانت مسجلة بالفعل في الذاكرة بنص عادي
+            if (messages.length > 0 && messages[messages.length - 1].role === "user" && typeof messages[messages.length - 1].content === "string" && messages[messages.length - 1].content === userMessage) {
+                messages.pop();
+            }
+            
+            messages.push({
+                role: "user",
+                content: [
+                    {
+                        type: "text",
+                        text: userMessage || "صف هذه الصورة بالتفصيل."
+                    },
+                    {
+                        type: "image_url",
+                        image_url: {
+                            url: `data:image/jpeg;base64,${base64Image}`
                         }
-                    ]
-                }
-            ];
+                    }
+                ]
+            });
         } else {
-            console.log(`Generating AI response for message: "${userMessage}"`);
-            messages = [
-                {
-                    role: "system",
-                    content: "أنت مساعد ذكي ومحترف تجيب على رسائل الواتساب بدقة واختصار وباللغة العربية الفصحى. تجنب تماماً استخدام أي علامات تنسيق ماركداون (مثل ** أو * أو `) في إجابتك، واجعل الرد يبدو طبيعياً كرسالة واتساب عادية."
-                },
-                {
+            // إذا كانت الرسالة موجودة بالفعل كآخر رسالة في الذاكرة (تم تسجيلها عند الاستلام) فلا نقوم بتكرارها
+            const hasCurrentMessageInHistory = messages.length > 0 && 
+                messages[messages.length - 1].role === "user" && 
+                messages[messages.length - 1].content === userMessage;
+                
+            if (!hasCurrentMessageInHistory) {
+                messages.push({
                     role: "user",
                     content: userMessage
-                }
-            ];
+                });
+            }
         }
+
+        console.log(`Calling Groq API with conversation history context (Memory size: ${messages.length - 1} messages)`);
 
         const response = await axios.post(
             "https://api.groq.com/openai/v1/chat/completions",
             {
-                model: base64Image ? "llama-3.2-11b-vision-preview" : (process.env.GROQ_MODEL || "llama-3.3-70b-versatile"),
+                model: model,
                 messages: messages,
-                temperature: 0.7
+                temperature: temp
             },
             {
                 headers: {
@@ -154,6 +364,8 @@ async function handleIncomingWhatsAppMessage(msg) {
     const senderNumber = senderJid.split('@')[0];
     const senderName = msg.pushName || senderNumber;
     
+    stats.messagesReceived++;
+    
     // Extract text content
     let text = "";
     if (msg.message.conversation) {
@@ -172,6 +384,9 @@ async function handleIncomingWhatsAppMessage(msg) {
         text = `[رسالة غير مدعومة]`;
     }
     
+    // Log incoming message to CRM database
+    logMessage(senderJid, false, senderName, text);
+    
     const escapedText = escapeHtml(text);
     const escapedSenderName = escapeHtml(senderName);
     
@@ -184,7 +399,7 @@ async function handleIncomingWhatsAppMessage(msg) {
         `<i>رد على هذه الرسالة للرد على المرسل في واتساب.</i>\n` +
         `[From: <code>${senderJid}</code>]`;
         
-    await sendTelegramMessage(notification);
+    // await sendTelegramMessage(notification);
 
     const isGroup = senderJid.endsWith('@g.us');
     
@@ -217,6 +432,8 @@ async function handleIncomingWhatsAppMessage(msg) {
                         if (transResp.data && transResp.data.text) {
                             console.log(`Transcribed text: "${transResp.data.text}"`);
                             rawText = transResp.data.text;
+                            // Update text log in database to include transcribed text
+                            logMessage(senderJid, false, senderName, `🎙️ [فويس مترجم]: ${rawText}`);
                         } else {
                             rawText = "";
                         }
@@ -252,21 +469,67 @@ async function handleIncomingWhatsAppMessage(msg) {
                 if (isPlaceholderText) {
                     rawText = "";
                 }
-
+                
                 if (rawText && rawText.trim().length > 0) {
-                    // Send composing or recording presence
+                    // Check static keywords responders first
+                    const keywordReply = checkKeywordResponders(rawText);
+                    if (keywordReply) {
+                        console.log(`Keyword responder triggered for: "${rawText}" -> "${keywordReply}"`);
+                        
+                        try {
+                            const presence = aiVoiceReply ? 'recording' : 'composing';
+                            await sock.sendPresenceUpdate(presence, senderJid);
+                        } catch (presenceErr) {}
+                        
+                        if (aiVoiceReply) {
+                            try {
+                                console.log("Calling Edge TTS via proxy for keyword reply...");
+                                const voiceName = db.config.tts_voice || "egyptian-male";
+                                const ttsUrl = `http://localhost:8090/tts?text=${encodeURIComponent(keywordReply)}&voice=${voiceName}`;
+                                const ttsResp = await axios.get(ttsUrl, { responseType: 'arraybuffer' });
+                                
+                                const tempFilePath = `session/temp_voice_${Date.now()}.mp3`;
+                                fs.writeFileSync(tempFilePath, Buffer.from(ttsResp.data));
+                                
+                                await sock.sendMessage(senderJid, { 
+                                    audio: { url: tempFilePath }, 
+                                    mimetype: 'audio/mp4', 
+                                    ptt: true 
+                                });
+                                
+                                logMessage(senderJid, true, sock.user.name || 'الرد التلقائي', `🎙️ [رد صوتي] ${keywordReply}`);
+                                stats.voiceRepliesSent++;
+                                
+                                try {
+                                    fs.unlinkSync(tempFilePath);
+                                } catch (cleanErr) {}
+                            } catch (ttsErr) {
+                                console.error("TTS generation for keyword failed, falling back to text:", ttsErr.message);
+                                await sock.sendMessage(senderJid, { text: keywordReply });
+                                logMessage(senderJid, true, sock.user.name || 'الرد التلقائي', keywordReply);
+                                stats.repliesSent++;
+                            }
+                        } else {
+                            await sock.sendMessage(senderJid, { text: keywordReply });
+                            logMessage(senderJid, true, sock.user.name || 'الرد التلقائي', keywordReply);
+                            stats.repliesSent++;
+                        }
+                        return; // Stop here, do not run AI
+                    }
+                    
+                    // Get AI response if no keyword matched
                     try {
                         const presence = aiVoiceReply ? 'recording' : 'composing';
                         await sock.sendPresenceUpdate(presence, senderJid);
                     } catch (presenceErr) {}
-
-                    // Get AI response
-                    const aiResponse = await getAIResponse(rawText, base64Image);
+                    
+                    const aiResponse = await getAIResponse(senderJid, rawText, base64Image);
                     if (aiResponse) {
                         if (aiVoiceReply) {
                             try {
                                 console.log("Calling Edge TTS via proxy...");
-                                const ttsUrl = `http://localhost:8090/tts?text=${encodeURIComponent(aiResponse)}`;
+                                const voiceName = db.config.tts_voice || "egyptian-male";
+                                const ttsUrl = `http://localhost:8090/tts?text=${encodeURIComponent(aiResponse)}&voice=${voiceName}`;
                                 const ttsResp = await axios.get(ttsUrl, { responseType: 'arraybuffer' });
                                 
                                 const tempFilePath = `session/temp_voice_${Date.now()}.mp3`;
@@ -279,16 +542,24 @@ async function handleIncomingWhatsAppMessage(msg) {
                                 });
                                 console.log(`Auto-replied to ${senderJid} with AI Voice message.`);
                                 
+                                logMessage(senderJid, true, sock.user.name || 'الرد الذكي', `🎙️ [رد صوتي] ${aiResponse}`);
+                                stats.voiceRepliesSent++;
+                                
                                 try {
                                     fs.unlinkSync(tempFilePath);
                                 } catch (cleanErr) {}
                             } catch (ttsErr) {
                                 console.error("TTS generation or sending failed, falling back to text:", ttsErr.message);
                                 await sock.sendMessage(senderJid, { text: aiResponse });
+                                logMessage(senderJid, true, sock.user.name || 'الرد الذكي', aiResponse);
+                                stats.repliesSent++;
                             }
                         } else {
                             await sock.sendMessage(senderJid, { text: aiResponse });
                             console.log(`Auto-replied to ${senderJid} with AI text response.`);
+                            
+                            logMessage(senderJid, true, sock.user.name || 'الرد الذكي', aiResponse);
+                            stats.repliesSent++;
                         }
                     }
                 }
@@ -487,9 +758,18 @@ if (fs.existsSync('session/creds.json') && fs.existsSync('session/telegram_chat_
 
 // HTTP API endpoints
 app.get('/status', (req, res) => {
+    const user = sock && sock.user ? {
+        name: sock.user.name || 'حساب واتساب',
+        phone: sock.user.id.split(':')[0].split('@')[0],
+        avatar: profilePicUrl
+    } : null;
+
     res.json({
         state: connectionState,
-        qr: qrCode ? true : false
+        qr: qrCode ? true : false,
+        user: user,
+        stats: stats,
+        logs: liveLogs
     });
 });
 
@@ -521,6 +801,7 @@ app.post('/send', async (req, res) => {
     }
     try {
         await sock.sendMessage(to, { text: message });
+        logMessage(to, true, sock.user.name, message); // Log it to DB
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -551,25 +832,144 @@ app.post('/disconnect', async (req, res) => {
 app.get('/config', (req, res) => {
     res.json({
         ai_auto_reply: aiAutoReply,
-        ai_voice_reply: aiVoiceReply
+        ai_voice_reply: aiVoiceReply,
+        ai_transcribe_voice: aiTranscribeVoice,
+        ai_image_vision: aiImageVision,
+        system_prompt: db.config.system_prompt,
+        selected_model: db.config.selected_model,
+        tts_voice: db.config.tts_voice,
+        temperature: db.config.temperature,
+        api_keys: db.config.api_keys
     });
 });
 
 app.post('/config', (req, res) => {
-    const { ai_auto_reply, ai_voice_reply } = req.body;
+    const { 
+        ai_auto_reply, 
+        ai_voice_reply, 
+        ai_transcribe_voice, 
+        ai_image_vision,
+        system_prompt,
+        selected_model,
+        tts_voice,
+        temperature,
+        api_keys
+    } = req.body;
+    
     if (ai_auto_reply !== undefined) aiAutoReply = !!ai_auto_reply;
     if (ai_voice_reply !== undefined) aiVoiceReply = !!ai_voice_reply;
+    if (ai_transcribe_voice !== undefined) aiTranscribeVoice = !!ai_transcribe_voice;
+    if (ai_image_vision !== undefined) aiImageVision = !!ai_image_vision;
+    
+    if (system_prompt !== undefined) db.config.system_prompt = system_prompt;
+    if (selected_model !== undefined) db.config.selected_model = selected_model;
+    if (tts_voice !== undefined) db.config.tts_voice = tts_voice;
+    if (temperature !== undefined) db.config.temperature = temperature;
+    if (api_keys !== undefined) db.config.api_keys = api_keys;
+    
     try {
         if (!fs.existsSync('session')) {
             fs.mkdirSync('session');
         }
         fs.writeFileSync('session/config.json', JSON.stringify({
             ai_auto_reply: aiAutoReply,
-            ai_voice_reply: aiVoiceReply
+            ai_voice_reply: aiVoiceReply,
+            ai_transcribe_voice: aiTranscribeVoice,
+            ai_image_vision: aiImageVision
         }, null, 2));
-        res.json({ success: true, ai_auto_reply: aiAutoReply, ai_voice_reply: aiVoiceReply });
+        
+        saveDb();
+        
+        res.json({ 
+            success: true, 
+            ai_auto_reply: aiAutoReply, 
+            ai_voice_reply: aiVoiceReply,
+            ai_transcribe_voice: aiTranscribeVoice,
+            ai_image_vision: aiImageVision,
+            system_prompt: db.config.system_prompt,
+            selected_model: db.config.selected_model,
+            tts_voice: db.config.tts_voice,
+            temperature: db.config.temperature,
+            api_keys: db.config.api_keys
+        });
     } catch (e) {
         res.status(500).json({ error: e.message });
+    }
+});
+
+// New premium API endpoints
+app.get('/chats', (req, res) => {
+    const chatsList = Object.keys(db.chats).map(jid => ({
+        jid: jid,
+        name: db.chats[jid].name,
+        phone: db.chats[jid].phone,
+        lastMessage: db.chats[jid].lastMessage,
+        timestamp: db.chats[jid].timestamp
+    }));
+    res.json(chatsList);
+});
+
+app.get('/chats/:jid/messages', (req, res) => {
+    const jid = req.params.jid;
+    if (db.chats[jid]) {
+        res.json(db.chats[jid].messages);
+    } else {
+        res.json([]);
+    }
+});
+
+app.post('/chats/:jid/send', async (req, res) => {
+    const jid = req.params.jid;
+    const { message } = req.body;
+    
+    if (!sock || connectionState !== 'CONNECTED') {
+        return res.status(400).json({ error: 'WhatsApp not connected' });
+    }
+    
+    try {
+        await sock.sendMessage(jid, { text: message });
+        logMessage(jid, true, sock.user.name || 'مستشار المبيعات', message);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/keywords', (req, res) => {
+    res.json(db.keywords);
+});
+
+app.post('/keywords', (req, res) => {
+    const { keywords } = req.body;
+    if (Array.isArray(keywords)) {
+        db.keywords = keywords;
+        saveDb();
+        res.json({ success: true, keywords: db.keywords });
+    } else {
+        res.status(400).json({ error: "Invalid keywords format" });
+    }
+});
+
+app.post('/campaign/start', (req, res) => {
+    const { list, message, delay } = req.body;
+    const result = startCampaign(list, message, delay);
+    if (result.success) {
+        res.json(result);
+    } else {
+        res.status(400).json(result);
+    }
+});
+
+app.get('/campaign/status', (req, res) => {
+    res.json(db.campaign);
+});
+
+app.post('/campaign/cancel', (req, res) => {
+    const result = cancelCampaign();
+    if (result.success) {
+        res.json(result);
+    } else {
+        res.status(400).json(result);
     }
 });
 
