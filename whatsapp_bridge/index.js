@@ -44,14 +44,27 @@ function loadDb() {
             { keyword: "سعر", response: "سعر الاشتراك في باقتنا المميزة هو 99 دولار شهرياً شاملة الدعم الفني وتحديثات الذكاء الاصطناعي." }
         ];
     }
-    if (!db.config) db.config = {
-        system_prompt: "أنت مساعد ذكي ومحترف تجيب على رسائل الواتساب بدقة واختصار وباللغة العربية الفصحى. تجنب تماماً استخدام أي علامات تنسيق ماركداون (مثل ** أو * أو `) في إجابتك، واجعل الرد يبدو طبيعياً كرسالة واتساب عادية.",
-        selected_model: "llama-3.3-70b-versatile",
-        tts_voice: "egyptian-male",
-        temperature: 0.7,
-        api_keys: { groq: "", fal: "" }
+    if (!db.config) db.config = {};
+    if (!db.config.system_prompt) db.config.system_prompt = "أنت مساعد ذكي ومحترف تجيب على رسائل الواتساب بدقة واختصار وباللغة العربية الفصحى. تجنب تماماً استخدام أي علامات تنسيق ماركداون (مثل ** أو * أو `) في إجابتك، واجعل الرد يبدو طبيعياً كرسالة واتساب عادية.";
+    if (!db.config.selected_model) db.config.selected_model = "llama-3.3-70b-versatile";
+    if (!db.config.tts_voice) db.config.tts_voice = "egyptian-male";
+    if (db.config.temperature === undefined) db.config.temperature = 0.7;
+    if (!db.config.api_keys) db.config.api_keys = { groq: "", fal: "" };
+    
+    // SaaS CRM additions
+    if (db.config.translation_enabled === undefined) db.config.translation_enabled = false;
+    if (!db.config.translation_lang) db.config.translation_lang = "ar";
+    if (db.config.welcome_menu_enabled === undefined) db.config.welcome_menu_enabled = false;
+    if (!db.config.welcome_menu_text) db.config.welcome_menu_text = "مرحباً بك! يرجى الرد برقم الخيار:\n1️⃣ للأسعار والخدمات\n2️⃣ لحجز موعد استشارة\n3️⃣ للتحدث مع موظف خدمة العملاء";
+    if (!db.config.welcome_menu_actions) db.config.welcome_menu_actions = { 
+        "1": "سعر باقة الاشتراك هو 99$ شهرياً شامل التحديثات والدعم.",
+        "2": "يمكنك حجز موعد بكتابة 'احجز موعد السبت القادم الساعة 4' وسنقوم بجدولته فوراً.",
+        "3": "تم إرسال طلبك للدعم البشري، سيتحدث معك أحد وكلائنا قريباً."
     };
+    
     if (!db.campaign) db.campaign = { running: false, total: 0, sent: 0, failed: 0, list: [], message: "", delay: 5 };
+    if (!db.appointments) db.appointments = [];
+    if (!db.scheduledMessages) db.scheduledMessages = [];
 }
 
 function saveDb() {
@@ -65,7 +78,7 @@ function saveDb() {
     }
 }
 
-function logMessage(jid, fromMe, senderName, text) {
+function logMessage(jid, fromMe, senderName, text, translation = null) {
     if (!jid || jid.endsWith('@g.us')) return; // ignore groups or empty JIDs
     
     if (!db.chats[jid]) {
@@ -74,7 +87,9 @@ function logMessage(jid, fromMe, senderName, text) {
             phone: jid.split('@')[0],
             lastMessage: text || '',
             timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
-            messages: []
+            messages: [],
+            notes: [],
+            leadInfo: { name: senderName || "", email: "", phone: "", category: "general", summary: "" }
         };
     }
     db.chats[jid].lastMessage = text || '';
@@ -87,6 +102,7 @@ function logMessage(jid, fromMe, senderName, text) {
         id: Math.random().toString(36).substring(7),
         fromMe: fromMe,
         text: text || '',
+        translation: translation,
         timestamp: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
     });
     
@@ -199,6 +215,130 @@ function cancelCampaign() {
     return { success: false, error: "No active campaign to cancel" };
 }
 
+async function extractLeadInfo(jid, text) {
+    const groqKey = (db.config.api_keys && db.config.api_keys.groq) || process.env.GROQ_API_KEY;
+    if (!groqKey) return;
+    
+    try {
+        console.log(`Extracting lead info for JID: ${jid}...`);
+        const systemPrompt = 
+            "أنت نظام استخراج بيانات ذكي ومحترف. قم بتحليل الرسالة الأخيرة للعميل واستخرج البيانات التالية بصيغة JSON فقط دون أي نصوص أخرى:\n" +
+            "{\n" +
+            "  \"name\": \"اسم العميل إذا تم ذكره، وإلا اتركه فارغاً\",\n" +
+            "  \"email\": \"بريد العميل الإلكتروني إذا تم ذكره، وإلا اتركه فارغاً\",\n" +
+            "  \"phone\": \"رقم الهاتف الإضافي إذا تم ذكره، وإلا اتركه فارغاً\",\n" +
+            "  \"category\": \"تصنيف العميل: اختر قيمة واحدة فقط من (hot, warm, cold, general)\",\n" +
+            "  \"summary\": \"ملخص من جملة واحدة لاحتياج العميل\"\n" +
+            "}";
+            
+        const response = await axios.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            {
+                model: "llama-3.1-8b-instant",
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: text }
+                ],
+                temperature: 0.1,
+                response_format: { type: "json_object" }
+            },
+            {
+                headers: {
+                    "Authorization": `Bearer ${groqKey}`,
+                    "Content-Type": "application/json"
+                },
+                timeout: 15000
+            }
+        );
+        
+        if (response.data && response.data.choices && response.data.choices[0]) {
+            const result = JSON.parse(response.data.choices[0].message.content.trim());
+            console.log("Extracted Lead Data:", result);
+            
+            if (!db.chats[jid]) return;
+            if (!db.chats[jid].leadInfo) {
+                db.chats[jid].leadInfo = { name: "", email: "", phone: "", category: "general", summary: "" };
+            }
+            
+            if (result.name) db.chats[jid].leadInfo.name = result.name;
+            if (result.email) db.chats[jid].leadInfo.email = result.email;
+            if (result.phone) db.chats[jid].leadInfo.phone = result.phone;
+            if (result.category) db.chats[jid].leadInfo.category = result.category;
+            if (result.summary) db.chats[jid].leadInfo.summary = result.summary;
+            
+            const lowerText = text.toLowerCase();
+            if (lowerText.includes("موعد") || lowerText.includes("احجز") || lowerText.includes("حجز") || lowerText.includes("ساعة") || lowerText.includes("يوم")) {
+                detectAppointment(jid, text);
+            }
+            
+            saveDb();
+        }
+    } catch (e) {
+        console.error("Failed to extract lead info:", e.message);
+    }
+}
+
+async function detectAppointment(jid, text) {
+    const groqKey = (db.config.api_keys && db.config.api_keys.groq) || process.env.GROQ_API_KEY;
+    if (!groqKey) return;
+    
+    try {
+        const systemPrompt = 
+            "أنت مساعد جدولة ذكي. قم بتحليل النص واستخرج تفاصيل الموعد بصيغة JSON فقط:\n" +
+            "{\n" +
+            "  \"isBooking\": true/false,\n" +
+            "  \"dateTime\": \"تاريخ ووقت الموعد المستخرج باللغة العربية (مثال: غدا الساعة 5 مساء)\",\n" +
+            "  \"title\": \"عنوان أو غرض الحجز (مثال: معاينة عقار أو استشارة)\"\n" +
+            "}";
+            
+        const response = await axios.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            {
+                model: "llama-3.1-8b-instant",
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: text }
+                ],
+                temperature: 0.1,
+                response_format: { type: "json_object" }
+            },
+            {
+                headers: {
+                    "Authorization": `Bearer ${groqKey}`,
+                    "Content-Type": "application/json"
+                },
+                timeout: 10000
+            }
+        );
+        
+        if (response.data && response.data.choices && response.data.choices[0]) {
+            const result = JSON.parse(response.data.choices[0].message.content.trim());
+            if (result.isBooking && result.dateTime) {
+                if (!db.appointments) db.appointments = [];
+                
+                // Avoid duplicate appointments for the same JID within a close range
+                const exists = db.appointments.some(app => app.jid === jid && app.dateTime === result.dateTime);
+                if (!exists) {
+                    db.appointments.unshift({
+                        id: Math.random().toString(36).substring(7),
+                        jid: jid,
+                        contactName: db.chats[jid] ? db.chats[jid].name : jid.split('@')[0],
+                        dateTime: result.dateTime,
+                        title: result.title || "استشارة عامة"
+                    });
+                    
+                    if (db.appointments.length > 30) db.appointments.pop();
+                    
+                    addLog('success', `تم جدولة موعد جديد تلقائياً لـ ${db.chats[jid].name || jid}: ${result.dateTime} - ${result.title}`);
+                    saveDb();
+                }
+            }
+        }
+    } catch (err) {
+        console.error("Failed to detect appointment booking:", err.message);
+    }
+}
+
 // Load database immediately
 loadDb();
 
@@ -209,6 +349,66 @@ function addLog(type, message) {
         liveLogs.pop();
     }
 }
+
+// Translation utility
+async function translateText(text, targetLang = "ar") {
+    const groqKey = (db.config.api_keys && db.config.api_keys.groq) || process.env.GROQ_API_KEY;
+    if (!groqKey || !text) return text;
+    try {
+        const systemPrompt = `You are a professional translator. Translate the text input exactly into the target language "${targetLang}". Return ONLY the translated text, do not add any quotes, explanations, markdown formatting or extra text. Keep the style completely natural.`;
+        const response = await axios.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            {
+                model: "llama-3.1-8b-instant",
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: text }
+                ],
+                temperature: 0.1
+            },
+            {
+                headers: {
+                    "Authorization": `Bearer ${groqKey}`,
+                    "Content-Type": "application/json"
+                },
+                timeout: 10000
+            }
+        );
+        if (response.data && response.data.choices && response.data.choices[0]) {
+            return response.data.choices[0].message.content.trim();
+        }
+    } catch (e) {
+        console.error("Translation failed:", e.message);
+    }
+    return text;
+}
+
+// Scheduled follow-ups background runner
+setInterval(async () => {
+    if (!sock || connectionState !== 'CONNECTED') return;
+    const now = Date.now();
+    if (!db.scheduledMessages) db.scheduledMessages = [];
+    
+    const dueMessages = db.scheduledMessages.filter(msg => !msg.sent && !msg.failed && new Date(msg.sendAt).getTime() <= now);
+    
+    for (const msg of dueMessages) {
+        try {
+            await sock.sendMessage(msg.jid, { text: msg.message });
+            msg.sent = true;
+            logMessage(msg.jid, true, sock.user.name || 'مستشار المبيعات', msg.message);
+            addLog('success', `[جدولة تلقائية] تم إرسال رسالة متابعة مجدولة إلى ${msg.contactName || msg.jid}`);
+        } catch (err) {
+            console.error(`Failed to send scheduled message:`, err.message);
+            msg.failed = true;
+            addLog('error', `فشل إرسال رسالة مجدولة لـ ${msg.jid}: ${err.message}`);
+        }
+    }
+    if (dueMessages.length > 0) {
+        // Keep active or clean old sent items
+        db.scheduledMessages = db.scheduledMessages.filter(msg => !msg.sent && !msg.failed);
+        saveDb();
+    }
+}, 10000);
 
 // Load AI auto-reply config if exists
 try {
@@ -386,6 +586,9 @@ async function handleIncomingWhatsAppMessage(msg) {
     
     // Log incoming message to CRM database
     logMessage(senderJid, false, senderName, text);
+    
+    // Background AI profiling of contacts
+    extractLeadInfo(senderJid, text).catch(e => console.error("Lead extraction error:", e));
     
     const escapedText = escapeHtml(text);
     const escapedSenderName = escapeHtml(senderName);
@@ -696,6 +899,7 @@ async function initWhatsApp(chatId, pairPhone = null, forceNewSession = false) {
             }
         } else if (connection === 'open') {
             console.log('WhatsApp connection opened successfully!');
+            const wasConnected = connectionState === 'CONNECTED';
             connectionState = 'CONNECTED';
             qrCode = null;
             
@@ -715,7 +919,9 @@ async function initWhatsApp(chatId, pairPhone = null, forceNewSession = false) {
                 profilePicUrl = null;
             }
             
-            sendTelegramMessage("✅ <b>تم ربط واتساب بنجاح!</b>\nالبوت متصل الآن ويمكنه استقبال وإرسال رسائل واتساب.");
+            if (!wasConnected) {
+                sendTelegramMessage("✅ <b>تم ربط واتساب بنجاح!</b>\nالبوت متصل الآن ويمكنه استقبال وإرسال رسائل واتساب.");
+            }
         }
     });
     
@@ -839,7 +1045,12 @@ app.get('/config', (req, res) => {
         selected_model: db.config.selected_model,
         tts_voice: db.config.tts_voice,
         temperature: db.config.temperature,
-        api_keys: db.config.api_keys
+        api_keys: db.config.api_keys,
+        translation_enabled: db.config.translation_enabled,
+        translation_lang: db.config.translation_lang,
+        welcome_menu_enabled: db.config.welcome_menu_enabled,
+        welcome_menu_text: db.config.welcome_menu_text,
+        welcome_menu_actions: db.config.welcome_menu_actions
     });
 });
 
@@ -853,7 +1064,12 @@ app.post('/config', (req, res) => {
         selected_model,
         tts_voice,
         temperature,
-        api_keys
+        api_keys,
+        translation_enabled,
+        translation_lang,
+        welcome_menu_enabled,
+        welcome_menu_text,
+        welcome_menu_actions
     } = req.body;
     
     if (ai_auto_reply !== undefined) aiAutoReply = !!ai_auto_reply;
@@ -866,6 +1082,11 @@ app.post('/config', (req, res) => {
     if (tts_voice !== undefined) db.config.tts_voice = tts_voice;
     if (temperature !== undefined) db.config.temperature = temperature;
     if (api_keys !== undefined) db.config.api_keys = api_keys;
+    if (translation_enabled !== undefined) db.config.translation_enabled = !!translation_enabled;
+    if (translation_lang !== undefined) db.config.translation_lang = translation_lang;
+    if (welcome_menu_enabled !== undefined) db.config.welcome_menu_enabled = !!welcome_menu_enabled;
+    if (welcome_menu_text !== undefined) db.config.welcome_menu_text = welcome_menu_text;
+    if (welcome_menu_actions !== undefined) db.config.welcome_menu_actions = welcome_menu_actions;
     
     try {
         if (!fs.existsSync('session')) {
@@ -890,7 +1111,12 @@ app.post('/config', (req, res) => {
             selected_model: db.config.selected_model,
             tts_voice: db.config.tts_voice,
             temperature: db.config.temperature,
-            api_keys: db.config.api_keys
+            api_keys: db.config.api_keys,
+            translation_enabled: db.config.translation_enabled,
+            translation_lang: db.config.translation_lang,
+            welcome_menu_enabled: db.config.welcome_menu_enabled,
+            welcome_menu_text: db.config.welcome_menu_text,
+            welcome_menu_actions: db.config.welcome_menu_actions
         });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -904,9 +1130,119 @@ app.get('/chats', (req, res) => {
         name: db.chats[jid].name,
         phone: db.chats[jid].phone,
         lastMessage: db.chats[jid].lastMessage,
-        timestamp: db.chats[jid].timestamp
+        timestamp: db.chats[jid].timestamp,
+        leadInfo: db.chats[jid].leadInfo || null,
+        notes: db.chats[jid].notes || [],
+        state: db.chats[jid].state || ''
     }));
     res.json(chatsList);
+});
+
+// SaaS CRM endpoints
+app.post('/chats/:jid/lead-category', (req, res) => {
+    const jid = req.params.jid;
+    const { category } = req.body;
+    if (db.chats[jid]) {
+        if (!db.chats[jid].leadInfo) {
+            db.chats[jid].leadInfo = { name: db.chats[jid].name || "", email: "", phone: db.chats[jid].phone || "", category: "general", summary: "" };
+        }
+        db.chats[jid].leadInfo.category = category;
+        saveDb();
+        res.json({ success: true, leadInfo: db.chats[jid].leadInfo });
+    } else {
+        res.status(404).json({ error: "Chat not found" });
+    }
+});
+
+app.post('/chats/:jid/notes', (req, res) => {
+    const jid = req.params.jid;
+    const { note } = req.body;
+    if (db.chats[jid]) {
+        if (!db.chats[jid].notes) db.chats[jid].notes = [];
+        db.chats[jid].notes.push({
+            id: Math.random().toString(36).substring(7),
+            text: note,
+            timestamp: new Date().toLocaleString('ar-EG')
+        });
+        saveDb();
+        res.json({ success: true, notes: db.chats[jid].notes });
+    } else {
+        res.status(404).json({ error: "Chat not found" });
+    }
+});
+
+app.get('/chats/:jid/notes', (req, res) => {
+    const jid = req.params.jid;
+    if (db.chats[jid]) {
+        res.json(db.chats[jid].notes || []);
+    } else {
+        res.json([]);
+    }
+});
+
+app.get('/scheduled-messages', (req, res) => {
+    res.json(db.scheduledMessages || []);
+});
+
+app.post('/scheduled-messages', (req, res) => {
+    const { jid, message, sendAt } = req.body;
+    if (!db.scheduledMessages) db.scheduledMessages = [];
+    const newMsg = {
+        id: Math.random().toString(36).substring(7),
+        jid,
+        contactName: db.chats[jid] ? db.chats[jid].name : jid.split('@')[0],
+        message,
+        sendAt,
+        sent: false,
+        failed: false
+    };
+    db.scheduledMessages.push(newMsg);
+    saveDb();
+    res.json({ success: true, scheduledMessage: newMsg });
+});
+
+app.post('/scheduled-messages/delete', (req, res) => {
+    const { id } = req.body;
+    if (db.scheduledMessages) {
+        db.scheduledMessages = db.scheduledMessages.filter(msg => msg.id !== id);
+        saveDb();
+        res.json({ success: true });
+    } else {
+        res.status(400).json({ error: "No scheduled messages" });
+    }
+});
+
+app.post('/chats/:jid/send-voice', async (req, res) => {
+    const jid = req.params.jid;
+    const { text, voice } = req.body;
+    if (!sock || connectionState !== 'CONNECTED') {
+        return res.status(400).json({ error: 'WhatsApp not connected' });
+    }
+    try {
+        const voiceName = voice || db.config.tts_voice || "egyptian-male";
+        const ttsUrl = `http://localhost:8090/tts?text=${encodeURIComponent(text)}&voice=${voiceName}`;
+        const ttsResp = await axios.get(ttsUrl, { responseType: 'arraybuffer' });
+        
+        const tempFilePath = `session/temp_voice_${Date.now()}.mp3`;
+        fs.writeFileSync(tempFilePath, Buffer.from(ttsResp.data));
+        
+        await sock.sendMessage(jid, { 
+            audio: { url: tempFilePath }, 
+            mimetype: 'audio/mp4', 
+            ptt: true 
+        });
+        
+        logMessage(jid, true, sock.user.name || 'مستشار المبيعات', `🎙️ [رد صوتي] ${text}`);
+        stats.voiceRepliesSent++;
+        
+        try {
+            fs.unlinkSync(tempFilePath);
+        } catch (cleanErr) {}
+        
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.get('/chats/:jid/messages', (req, res) => {
@@ -970,6 +1306,56 @@ app.post('/campaign/cancel', (req, res) => {
         res.json(result);
     } else {
         res.status(400).json(result);
+    }
+});
+
+app.get('/analytics', (req, res) => {
+    const totalChats = Object.keys(db.chats).length;
+    let hot = 0, warm = 0, cold = 0, general = 0;
+    
+    Object.keys(db.chats).forEach(jid => {
+        const cat = (db.chats[jid].leadInfo && db.chats[jid].leadInfo.category) || 'general';
+        if (cat === 'hot') hot++;
+        else if (cat === 'warm') warm++;
+        else if (cat === 'cold') cold++;
+        else general++;
+    });
+    
+    res.json({
+        totalChats,
+        leads: { hot, warm, cold, general },
+        totalAppointments: db.appointments ? db.appointments.length : 0,
+        totalCampaignsSent: db.campaign ? db.campaign.sent : 0
+    });
+});
+
+app.get('/appointments', (req, res) => {
+    res.json(db.appointments || []);
+});
+
+app.post('/appointments', (req, res) => {
+    const { jid, dateTime, title } = req.body;
+    if (!db.appointments) db.appointments = [];
+    const newApp = {
+        id: Math.random().toString(36).substring(7),
+        jid: jid || 'manual',
+        contactName: jid && db.chats[jid] ? db.chats[jid].name : 'عميل خارجي',
+        dateTime,
+        title: title || 'استشارة مخصصة'
+    };
+    db.appointments.unshift(newApp);
+    saveDb();
+    res.json({ success: true, appointment: newApp });
+});
+
+app.post('/appointments/delete', (req, res) => {
+    const { id } = req.body;
+    if (db.appointments) {
+        db.appointments = db.appointments.filter(app => app.id !== id);
+        saveDb();
+        res.json({ success: true });
+    } else {
+        res.status(400).json({ error: "No appointments database" });
     }
 });
 

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة التحكم الذكية - جسر واتساب AI</title>
+    <title>لوحة التحكم العالمية - جسر واتساب AI</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts: Cairo & Outfit -->
@@ -32,6 +32,9 @@
         }
         .glow-red {
             box-shadow: 0 0 25px rgba(239, 68, 68, 0.15);
+        }
+        .glow-amber {
+            box-shadow: 0 0 25px rgba(245, 158, 11, 0.15);
         }
         /* Hide scrollbars but keep functionality */
         .no-scrollbar::-webkit-scrollbar {
@@ -97,6 +100,11 @@
                     <span>محادثات العملاء والـ CRM</span>
                 </button>
 
+                <button onclick="switchTab('appointments')" id="btn-tab-appointments" class="nav-btn w-full flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800/40 hover:text-white transition-all text-xs font-bold text-right">
+                    <i class="fa-solid fa-calendar-check text-base text-slate-400 w-5"></i>
+                    <span>التقويم والمواعيد الذكية</span>
+                </button>
+
                 <button onclick="switchTab('broadcast')" id="btn-tab-broadcast" class="nav-btn w-full flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800/40 hover:text-white transition-all text-xs font-bold text-right">
                     <i class="fa-solid fa-paper-plane text-base text-slate-400 w-5"></i>
                     <span>الإرسال الجماعي (حملات)</span>
@@ -105,6 +113,16 @@
                 <button onclick="switchTab('keywords')" id="btn-tab-keywords" class="nav-btn w-full flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800/40 hover:text-white transition-all text-xs font-bold text-right">
                     <i class="fa-solid fa-tags text-base text-slate-400 w-5"></i>
                     <span>الردود التلقائية (كلمات مفتاحية)</span>
+                </button>
+
+                <button onclick="switchTab('pipeline')" id="btn-tab-pipeline" class="nav-btn w-full flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800/40 hover:text-white transition-all text-xs font-bold text-right">
+                    <i class="fa-solid fa-square-poll-vertical text-base text-slate-400 w-5"></i>
+                    <span>قمع المبيعات (Pipeline) 📊</span>
+                </button>
+
+                <button onclick="switchTab('scheduler')" id="btn-tab-scheduler" class="nav-btn w-full flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800/40 hover:text-white transition-all text-xs font-bold text-right">
+                    <i class="fa-solid fa-clock text-base text-slate-400 w-5"></i>
+                    <span>جدولة المتابعات 🕒</span>
                 </button>
 
                 <button onclick="switchTab('billing')" id="btn-tab-billing" class="nav-btn w-full flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800/40 hover:text-white transition-all text-xs font-bold text-right">
@@ -133,13 +151,13 @@
                 <i class="fa-solid fa-chart-pie text-lg"></i>
                 <span class="text-[9px] font-bold mt-1">الرئيسية</span>
             </button>
-            <button onclick="switchTab('ai-settings')" id="mob-tab-ai-settings" class="flex flex-col items-center justify-center text-slate-400 hover:text-white transition-all flex-1 py-1">
-                <i class="fa-solid fa-brain text-lg"></i>
-                <span class="text-[9px] font-bold mt-1">الذكاء</span>
-            </button>
-            <button onclick="switchTab('crm-chat')" id="mob-tab-crm-chat" class="flex flex-col items-center justify-center text-slate-400 hover:text-white transition-all flex-1 py-1 relative">
+            <button onclick="switchTab('crm-chat')" id="mob-tab-crm-chat" class="flex flex-col items-center justify-center text-slate-400 hover:text-white transition-all flex-1 py-1">
                 <i class="fa-solid fa-comments text-lg"></i>
                 <span class="text-[9px] font-bold mt-1">المحادثات</span>
+            </button>
+            <button onclick="switchTab('appointments')" id="mob-tab-appointments" class="flex flex-col items-center justify-center text-slate-400 hover:text-white transition-all flex-1 py-1">
+                <i class="fa-solid fa-calendar-check text-lg"></i>
+                <span class="text-[9px] font-bold mt-1">المواعيد</span>
             </button>
             <button onclick="switchTab('broadcast')" id="mob-tab-broadcast" class="flex flex-col items-center justify-center text-slate-400 hover:text-white transition-all flex-1 py-1">
                 <i class="fa-solid fa-paper-plane text-lg"></i>
@@ -278,47 +296,70 @@
                     </div>
                 </div>
 
-                <!-- Traffic Chart Dashboard -->
-                <div class="glass-card rounded-2xl p-6 space-y-4">
-                    <div class="flex items-center justify-between">
-                        <h3 class="text-sm font-black text-white flex items-center">
-                            <i class="fa-solid fa-chart-line ml-2 text-indigo-400"></i> معدل استهلاك الذكاء الاصطناعي اليومي
+                <!-- Global CRM Analytics Panel -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Left: Analytics Gauges -->
+                    <div class="glass-card rounded-2xl p-6 lg:col-span-2 space-y-6">
+                        <h3 class="text-sm font-black text-white border-b border-slate-800 pb-3 flex items-center">
+                            <i class="fa-solid fa-chart-line ml-2 text-indigo-400"></i> إحصائيات العملاء المحتملين والـ CRM
                         </h3>
-                        <span class="text-[10px] text-slate-400">تحديث تلقائي</span>
+                        
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            <!-- Hot Lead Category -->
+                            <div class="p-4 bg-red-950/20 border border-red-500/20 rounded-2xl text-center space-y-1 glow-red">
+                                <span class="text-red-400 text-xl"><i class="fa-solid fa-fire"></i></span>
+                                <h5 class="text-[9px] text-slate-400 font-bold uppercase">مهتم جداً (Hot)</h5>
+                                <p id="analytic-hot" class="text-2xl font-black text-white">0</p>
+                            </div>
+                            <!-- Warm Lead Category -->
+                            <div class="p-4 bg-indigo-950/20 border border-indigo-500/20 rounded-2xl text-center space-y-1 glow-indigo">
+                                <span class="text-indigo-400 text-xl"><i class="fa-solid fa-mug-hot"></i></span>
+                                <h5 class="text-[9px] text-slate-400 font-bold uppercase">مهتم (Warm)</h5>
+                                <p id="analytic-warm" class="text-2xl font-black text-white">0</p>
+                            </div>
+                            <!-- Cold Lead Category -->
+                            <div class="p-4 bg-slate-900/50 border border-slate-700/30 rounded-2xl text-center space-y-1">
+                                <span class="text-slate-400 text-xl"><i class="fa-solid fa-snowflake"></i></span>
+                                <h5 class="text-[9px] text-slate-400 font-bold uppercase">بارد (Cold)</h5>
+                                <p id="analytic-cold" class="text-2xl font-black text-white">0</p>
+                            </div>
+                            <!-- General Inquiry Category -->
+                            <div class="p-4 bg-emerald-950/20 border border-emerald-500/20 rounded-2xl text-center space-y-1 glow-green">
+                                <span class="text-emerald-400 text-xl"><i class="fa-solid fa-circle-question"></i></span>
+                                <h5 class="text-[9px] text-slate-400 font-bold uppercase">استفسار عام (General)</h5>
+                                <p id="analytic-general" class="text-2xl font-black text-white">0</p>
+                            </div>
+                        </div>
+
+                        <!-- Bar chart visualization -->
+                        <div class="space-y-3 pt-2">
+                            <h4 class="text-xs font-bold text-slate-400">توزيع اهتمامات العملاء الحاليين</h4>
+                            <div class="w-full bg-slate-900 rounded-full h-4 overflow-hidden flex">
+                                <div id="bar-hot" class="h-full bg-red-500 transition-all duration-500" style="width: 25%"></div>
+                                <div id="bar-warm" class="h-full bg-indigo-500 transition-all duration-500" style="width: 25%"></div>
+                                <div id="bar-general" class="h-full bg-emerald-500 transition-all duration-500" style="width: 25%"></div>
+                                <div id="bar-cold" class="h-full bg-slate-700 transition-all duration-500" style="width: 25%"></div>
+                            </div>
+                            <div class="flex justify-between text-[8px] text-slate-500 font-bold">
+                                <span class="flex items-center"><span class="w-1.5 h-1.5 rounded-full bg-red-500 ml-1"></span>مهتم جداً</span>
+                                <span class="flex items-center"><span class="w-1.5 h-1.5 rounded-full bg-indigo-500 ml-1"></span>مهتم</span>
+                                <span class="flex items-center"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 ml-1"></span>استفسار</span>
+                                <span class="flex items-center"><span class="w-1.5 h-1.5 rounded-full bg-slate-700 ml-1"></span>بارد</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="h-44 w-full flex items-end justify-between pt-4 pb-2 px-2 border-b border-slate-800">
-                        <!-- Simulated Chart Bars (SVG or Flex Layout CSS) -->
-                        <div class="flex flex-col items-center space-y-2 w-[12%]">
-                            <div class="w-full bg-slate-800 rounded-t-lg h-16"></div>
-                            <span class="text-[9px] text-slate-500">الأحد</span>
+
+                    <!-- Right: Quick Reminders panel -->
+                    <div class="glass-card rounded-2xl p-6 space-y-4 flex flex-col">
+                        <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                            <h3 class="text-sm font-black text-white flex items-center">
+                                <i class="fa-solid fa-clock ml-2 text-indigo-400"></i> تذكيرات المواعيد القريبة
+                            </h3>
+                            <button onclick="switchTab('appointments')" class="text-[10px] text-indigo-400 hover:underline font-bold">الكل</button>
                         </div>
-                        <div class="flex flex-col items-center space-y-2 w-[12%]">
-                            <div class="w-full bg-slate-800 rounded-t-lg h-24"></div>
-                            <span class="text-[9px] text-slate-500">الاثنين</span>
-                        </div>
-                        <div class="flex flex-col items-center space-y-2 w-[12%]">
-                            <div class="w-full bg-indigo-500/30 border-t border-indigo-500 rounded-t-lg h-36 relative glow-indigo">
-                                <span class="absolute -top-6 left-1/2 transform -translate-x-1/2 text-[9px] text-indigo-400 font-bold">142</span>
-                            </div>
-                            <span class="text-[9px] text-slate-500">الثلاثاء</span>
-                        </div>
-                        <div class="flex flex-col items-center space-y-2 w-[12%]">
-                            <div class="w-full bg-slate-800 rounded-t-lg h-20"></div>
-                            <span class="text-[9px] text-slate-500">الأربعاء</span>
-                        </div>
-                        <div class="flex flex-col items-center space-y-2 w-[12%]">
-                            <div class="w-full bg-slate-800 rounded-t-lg h-28"></div>
-                            <span class="text-[9px] text-slate-500">الخميس</span>
-                        </div>
-                        <div class="flex flex-col items-center space-y-2 w-[12%]">
-                            <div class="w-full bg-emerald-500/30 border-t border-emerald-500 rounded-t-lg h-40 relative glow-green">
-                                <span class="absolute -top-6 left-1/2 transform -translate-x-1/2 text-[9px] text-emerald-400 font-bold">185</span>
-                            </div>
-                            <span class="text-[9px] text-slate-500">الجمعة</span>
-                        </div>
-                        <div class="flex flex-col items-center space-y-2 w-[12%]">
-                            <div class="w-full bg-indigo-600 rounded-t-lg h-32 relative glow-indigo"></div>
-                            <span class="text-[9px] text-indigo-400 font-bold">اليوم</span>
+                        
+                        <div id="dashboard-appointments" class="flex-1 overflow-y-auto space-y-2 custom-scroll max-h-48">
+                            <p class="text-[10px] text-slate-500 text-center py-6">لا توجد مواعيد مجدولة قريباً</p>
                         </div>
                     </div>
                 </div>
@@ -421,6 +462,36 @@
                             </label>
                         </div>
 
+                        <!-- Auto-Translation Toggle -->
+                        <div class="flex items-center justify-between py-2 border-t border-slate-800/40 pt-4">
+                            <div class="space-y-1">
+                                <h4 class="text-xs font-bold text-white">نظام الترجمة الفورية العالمي 🌐</h4>
+                                <p class="text-[10px] text-slate-400 max-w-sm">ترجمة رسائل العملاء الأجنبية تلقائياً في الشات والرد بنفس لغة العميل.</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input id="toggle-translation" type="checkbox" onchange="saveFullAIConfig()" class="sr-only peer">
+                                <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:-translate-x-full after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-slate-400 peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                            </label>
+                        </div>
+
+                        <!-- Welcome Menu Toggle -->
+                        <div class="flex items-center justify-between py-2 border-t border-slate-800/40 pt-4">
+                            <div class="space-y-1">
+                                <h4 class="text-xs font-bold text-white">تفعيل قائمة الترحيب التفاعلية (Welcome Menu) 👋</h4>
+                                <p class="text-[10px] text-slate-400 max-w-sm">إرسال قائمة خيارات مرقمة تلقائياً للعملاء الجدد وتوجيههم.</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input id="toggle-welcome" type="checkbox" onchange="saveFullAIConfig()" class="sr-only peer">
+                                <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:-translate-x-full after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-slate-400 peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                            </label>
+                        </div>
+
+                        <!-- Welcome Menu Customize Text (Collapsible) -->
+                        <div id="welcome-config-area" class="border-t border-slate-800/40 pt-4 space-y-2 hidden">
+                            <label class="text-[11px] text-slate-400 block mb-1">نص رسالة الترحيب والخيارات:</label>
+                            <textarea id="welcome-menu-text" rows="3" class="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+                        </div>
+
                         <!-- Temperature Slider -->
                         <div class="border-t border-slate-800/40 pt-4 space-y-2">
                             <div class="flex justify-between items-center text-xs">
@@ -480,14 +551,14 @@
             <section id="tab-crm-chat" class="tab-content hidden">
                 <div class="glass-card rounded-2xl overflow-hidden border border-slate-800/40 flex flex-col md:flex-row h-[75vh]">
                     
-                    <!-- Contacts Sidebar -->
-                    <div class="w-full md:w-80 border-l border-slate-800/40 flex flex-col h-1/3 md:h-full bg-slate-950/20">
-                        <div class="p-4 border-b border-slate-800/40">
+                    <!-- 1st Column: Contacts Sidebar -->
+                    <div class="w-full md:w-64 border-l border-slate-800/40 flex flex-col h-1/4 md:h-full bg-slate-950/20">
+                        <div class="p-3 border-b border-slate-800/40">
                             <div class="relative">
                                 <span class="absolute inset-y-0 right-3 flex items-center text-slate-500">
-                                    <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                                    <i class="fa-solid fa-magnifying-glass text-[10px]"></i>
                                 </span>
-                                <input id="contact-search" type="text" placeholder="البحث في جهات الاتصال..." class="w-full bg-slate-900 border border-slate-700/50 rounded-xl pr-9 pl-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500">
+                                <input id="contact-search" type="text" placeholder="البحث في جهات الاتصال..." class="w-full bg-slate-900 border border-slate-700/50 rounded-xl pr-8 pl-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500">
                             </div>
                         </div>
                         
@@ -497,8 +568,8 @@
                         </div>
                     </div>
 
-                    <!-- Chat Window Area -->
-                    <div class="flex-1 flex flex-col h-2/3 md:h-full">
+                    <!-- 2nd Column: Chat Window Area -->
+                    <div class="flex-1 flex flex-col h-2/4 md:h-full">
                         <!-- Chat Header -->
                         <div id="chat-header" class="px-6 py-4 border-b border-slate-800/40 flex items-center justify-between bg-slate-950/10">
                             <div class="flex items-center space-x-3 space-x-reverse">
@@ -527,10 +598,79 @@
                         <div id="chat-input-container" class="p-4 border-t border-slate-800/40 bg-slate-950/20 hidden">
                             <div class="flex items-center space-x-2 space-x-reverse">
                                 <textarea id="chat-message-input" rows="1" placeholder="اكتب ردك للعميل هنا..." class="flex-1 bg-slate-900 border border-slate-700/50 rounded-xl px-4 py-2.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 resize-none max-h-24 custom-scroll leading-relaxed" onkeydown="handleChatInputKey(event)"></textarea>
-                                <button onclick="sendManualMessage()" class="w-10 h-10 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl flex items-center justify-center text-sm transition-all shrink-0 shadow-lg shadow-indigo-600/10">
+                                <button onclick="sendManualMessage()" title="إرسال نصي" class="w-10 h-10 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl flex items-center justify-center text-sm transition-all shrink-0 shadow-lg shadow-indigo-600/10">
                                     <i class="fa-solid fa-paper-plane"></i>
                                 </button>
+                                <button onclick="sendManualVoiceMessage()" title="إرسال كبصمة صوتية" class="w-10 h-10 bg-rose-600 hover:bg-rose-500 text-white rounded-xl flex items-center justify-center text-sm transition-all shrink-0 shadow-lg shadow-rose-600/10">
+                                    <i class="fa-solid fa-microphone"></i>
+                                </button>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- 3rd Column: Leads Profile & Summary (CRM widget) -->
+                    <div id="crm-profile-widget" class="w-full md:w-72 border-r border-slate-800/40 flex flex-col h-1/4 md:h-full bg-slate-950/35 p-4 space-y-4 hidden">
+                        <div class="border-b border-slate-800 pb-2">
+                            <h4 class="text-xs font-extrabold text-white flex items-center">
+                                <i class="fa-solid fa-user-tag ml-1.5 text-indigo-400"></i> بروفايل العميل بالذكاء الاصطناعي
+                            </h4>
+                        </div>
+                        
+                        <!-- Lead rating glow badge -->
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] text-slate-400">مستوى الاهتمام:</span>
+                            <span id="lead-badge" class="px-3 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider">عام</span>
+                        </div>
+
+                        <!-- Extracted Profile Form -->
+                        <div class="space-y-3 text-xs flex-1 overflow-y-auto custom-scroll pr-1">
+                            <div>
+                                <span class="text-[9px] text-slate-500 block">الاسم المستخلص:</span>
+                                <p id="lead-name" class="font-bold text-slate-200">غير معروف</p>
+                            </div>
+                            <div>
+                                <span class="text-[9px] text-slate-500 block">رقم الاتصال:</span>
+                                <p id="lead-phone" class="font-mono text-slate-200">غير معروف</p>
+                            </div>
+                            <div>
+                                <span class="text-[9px] text-slate-500 block">البريد الإلكتروني:</span>
+                                <p id="lead-email" class="font-mono text-slate-200">غير معروف</p>
+                            </div>
+                            <div class="p-3 bg-slate-900/40 border border-slate-800/35 rounded-xl space-y-1">
+                                <span class="text-[9px] text-indigo-400 font-bold block"><i class="fa-solid fa-sparkles ml-1"></i> ملخص احتياج العميل (AI):</span>
+                                <p id="lead-summary" class="text-[10px] text-slate-300 leading-relaxed font-semibold">لم يقم الذكاء الاصطناعي بجمع بيانات كافية بعد.</p>
+                            </div>
+                        </div>
+
+                        <!-- Category selector -->
+                        <div class="border-t border-slate-800/40 pt-2 space-y-1.5">
+                            <span class="text-[9px] text-slate-500 block font-bold">تغيير تصنيف العميل:</span>
+                            <select id="crm-lead-category-select" onchange="changeLeadCategory(currentChatJid, this.value)" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-[10px] text-slate-200 focus:outline-none focus:border-indigo-500">
+                                <option value="general">عام (General)</option>
+                                <option value="cold">بارد (Cold)</option>
+                                <option value="warm">مهتم (Warm)</option>
+                                <option value="hot">ساخن (Hot)</option>
+                                <option value="won">ناجح (Won)</option>
+                            </select>
+                        </div>
+
+                        <!-- Notes section -->
+                        <div class="border-t border-slate-800/40 pt-2 space-y-2 flex-1 flex flex-col min-h-[120px]">
+                            <span class="text-[9px] text-indigo-400 font-bold block"><i class="fa-solid fa-note-sticky ml-1"></i> ملاحظات CRM الداخلية:</span>
+                            <div id="crm-notes-timeline" class="flex-1 space-y-1 overflow-y-auto text-[9px] text-slate-400 custom-scroll pr-1 max-h-[120px]">
+                                <p class="text-slate-600 text-center py-2">لا توجد ملاحظات مسجلة.</p>
+                            </div>
+                            <div class="flex space-x-1 space-x-reverse">
+                                <input type="text" id="crm-note-input" placeholder="أضف ملاحظة..." class="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-[10px] text-slate-200 focus:outline-none">
+                                <button onclick="addCRMNote()" class="px-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[10px] font-bold"><i class="fa-solid fa-plus"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- Quick Appointment Shortcut -->
+                        <div class="border-t border-slate-800/40 pt-2 space-y-2">
+                            <button onclick="openChatAppointmentModal()" class="w-full py-1.5 bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-500/20 hover:border-transparent rounded-lg text-[10px] font-bold transition-all">
+                                <i class="fa-solid fa-calendar-plus ml-1"></i> جدولة موعد تذكير للعميل
+                            </button>
                         </div>
                     </div>
 
@@ -538,7 +678,65 @@
             </section>
 
             <!-- ============================== -->
-            <!-- 4. BROADCAST TAB SECTION       -->
+            <!-- 4. APPOINTMENTS CALENDAR TAB   -->
+            <!-- ============================== -->
+            <section id="tab-appointments" class="tab-content space-y-6 hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Left: Create manual appointment -->
+                    <div class="glass-card rounded-2xl p-6 space-y-4">
+                        <h3 class="text-sm font-black text-white border-b border-slate-800 pb-3 flex items-center">
+                            <i class="fa-solid fa-calendar-plus ml-2 text-indigo-400"></i> جدولة موعد/تذكير جديد
+                        </h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">العميل المستهدف (أو رقم الجلسة):</label>
+                                <select id="appt-jid-select" class="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                                    <option value="">تحديد عميل من القائمة...</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">تاريخ ووقت التذكير (نصي):</label>
+                                <input id="appt-datetime" type="text" placeholder="مثال: غدا السبت الساعة 4 عصراً" class="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                            </div>
+                            <div>
+                                <label class="text-[11px] text-slate-400 block mb-1">محتوى أو تفاصيل التذكير:</label>
+                                <input id="appt-title" type="text" placeholder="مثال: إرسال الكتالوج أو إجراء اتصال" class="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                            </div>
+
+                            <button onclick="createManualAppointment()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-600/20">
+                                حفظ الموعد في التقويم
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Right: Appointments Table -->
+                    <div class="glass-card rounded-2xl p-6 space-y-4 lg:col-span-2">
+                        <h3 class="text-sm font-black text-white border-b border-slate-800 pb-3 flex items-center">
+                            <i class="fa-solid fa-calendar-days ml-2 text-indigo-400"></i> التقويم وجدول المواعيد المضافة
+                        </h3>
+                        <div class="overflow-x-auto custom-scroll">
+                            <table class="w-full text-right text-xs">
+                                <thead class="bg-slate-900/50 text-slate-400 uppercase text-[10px] font-bold border-b border-slate-800">
+                                    <tr>
+                                        <th class="py-3 px-4 rounded-r-xl">العميل</th>
+                                        <th class="py-3 px-4">تفاصيل التذكير</th>
+                                        <th class="py-3 px-4">الوقت المحدد</th>
+                                        <th class="py-3 px-4 rounded-l-xl text-center">حذف</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="appointments-tbody" class="divide-y divide-slate-800/30">
+                                    <tr>
+                                        <td colspan="4" class="py-8 text-center text-slate-500">لا توجد مواعيد مجدولة.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================== -->
+            <!-- 5. BROADCAST TAB SECTION       -->
             <!-- ============================== -->
             <section id="tab-broadcast" class="tab-content space-y-6 hidden">
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -551,7 +749,7 @@
                         
                         <div class="space-y-4">
                             <div>
-                                <label class="text-[11px] text-slate-400 block mb-1">قائمة الأرقام المستهدفة (افصل بينها بفاصة أو سطر جديد):</label>
+                                <label class="text-[11px] text-slate-400 block mb-1">قائمة الأرقام المستهدفة (افصل بينها بفاصلة أو سطر جديد):</label>
                                 <textarea id="broadcast-numbers" rows="6" placeholder="201234567890&#10;201098765432&#10;..." dir="ltr" class="w-full bg-slate-900 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-700 focus:outline-none focus:border-indigo-500 resize-none custom-scroll leading-relaxed font-mono"></textarea>
                             </div>
                             
@@ -623,7 +821,7 @@
                         <!-- Action Button inside active monitor -->
                         <div id="campaign-active-actions" class="hidden pt-4 border-t border-slate-800/40">
                             <button onclick="cancelBroadcast()" class="w-full py-2.5 bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/20 hover:border-transparent rounded-xl text-xs font-bold transition-all">
-                                <i class="fa-solid fa-stop ml-1"></i> إيقاف الحملة فورا
+                                <i class="fa-solid fa-stop ml-1"></i> إيقاف الحملة فوراً
                             </button>
                         </div>
                     </div>
@@ -632,7 +830,7 @@
             </section>
 
             <!-- ============================== -->
-            <!-- 5. KEYWORDS TAB SECTION        -->
+            <!-- 6. KEYWORDS TAB SECTION        -->
             <!-- ============================== -->
             <section id="tab-keywords" class="tab-content space-y-6 hidden">
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -689,7 +887,7 @@
             </section>
 
             <!-- ============================== -->
-            <!-- 6. BILLING & UPGRADE SECTION   -->
+            <!-- 7. BILLING & UPGRADE SECTION   -->
             <!-- ============================== -->
             <section id="tab-billing" class="tab-content space-y-6 hidden">
                 <!-- Current Subscription Header -->
@@ -875,12 +1073,14 @@
         let currentChatJid = '';
         let chatPollInterval = null;
         let keywordsList = [];
+        let allChats = [];
 
         // Tab routing definition
         const TAB_TITLES = {
             'dashboard': 'لوحة التحكم الرئيسية',
             'ai-settings': 'إعدادات الذكاء الاصطناعي',
             'crm-chat': 'محادثات العملاء والـ CRM',
+            'appointments': 'التقويم والمواعيد الذكية',
             'broadcast': 'الإرسال الجماعي (حملات)',
             'keywords': 'الردود التلقائية (كلمات مفتاحية)',
             'billing': 'الاشتراكات والفوترة'
@@ -891,6 +1091,7 @@
             checkStatus();
             loadAIConfig();
             loadKeywords();
+            loadAppointments();
             
             // Periodic background updates
             setInterval(checkStatus, 3000);
@@ -920,6 +1121,10 @@
                 stopChatPolling();
             }
 
+            if (tabId === 'appointments') {
+                loadAppointments();
+            }
+
             if (tabId === 'broadcast') {
                 checkCampaignStatus();
             }
@@ -929,7 +1134,9 @@
             // Reset styles for all buttons
             document.querySelectorAll('.nav-btn').forEach(btn => {
                 btn.className = "nav-btn w-full flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800/40 hover:text-white transition-all text-xs font-bold text-right";
-                btn.querySelector('i').className = btn.querySelector('i').className.replace('text-indigo-400', 'text-slate-400');
+                if(btn.querySelector('i')) {
+                    btn.querySelector('i').className = btn.querySelector('i').className.replace('text-indigo-400', 'text-slate-400');
+                }
             });
             
             // Mobile styling resets
@@ -941,7 +1148,9 @@
             const desktopBtn = document.getElementById(`btn-tab-${tabId}`);
             if (desktopBtn) {
                 desktopBtn.className = "nav-btn w-full flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl bg-indigo-500/10 text-indigo-400 transition-all text-xs font-black text-right border-r-4 border-indigo-500 shadow-md";
-                desktopBtn.querySelector('i').className = desktopBtn.querySelector('i').className.replace('text-slate-400', 'text-indigo-400');
+                if(desktopBtn.querySelector('i')) {
+                    desktopBtn.querySelector('i').className = desktopBtn.querySelector('i').className.replace('text-slate-400', 'text-indigo-400');
+                }
             }
 
             const mobileBtn = document.getElementById(`mob-tab-${tabId}`);
@@ -967,6 +1176,7 @@
                 // Update switches if on settings tab
                 if (currentTab === 'dashboard') {
                     renderLogs(data.logs);
+                    loadAnalytics();
                 }
                 
                 // If campaign active, update campaign dashboard status
@@ -1114,6 +1324,34 @@
                 }).join('');
             } else {
                 container.innerHTML = '<p class="text-slate-500 text-center py-12">لا توجد أحداث مسجلة بعد...</p>';
+            }
+        }
+
+        // Load CRM Analytics
+        async function loadAnalytics() {
+            try {
+                const res = await fetch('/analytics');
+                const data = await res.json();
+                
+                document.getElementById('analytic-hot').innerText = data.leads.hot;
+                document.getElementById('analytic-warm').innerText = data.leads.warm;
+                document.getElementById('analytic-cold').innerText = data.leads.cold;
+                document.getElementById('analytic-general').innerText = data.leads.general;
+                
+                // Update bar chart width percentages
+                const total = (data.leads.hot + data.leads.warm + data.leads.cold + data.leads.general) || 1;
+                const hotPercent = Math.round((data.leads.hot / total) * 100);
+                const warmPercent = Math.round((data.leads.warm / total) * 100);
+                const generalPercent = Math.round((data.leads.general / total) * 100);
+                const coldPercent = 100 - (hotPercent + warmPercent + generalPercent);
+                
+                document.getElementById('bar-hot').style.width = hotPercent + '%';
+                document.getElementById('bar-warm').style.width = warmPercent + '%';
+                document.getElementById('bar-general').style.width = generalPercent + '%';
+                document.getElementById('bar-cold').style.width = coldPercent + '%';
+
+            } catch (err) {
+                console.error("Failed to load analytics:", err);
             }
         }
 
@@ -1323,24 +1561,48 @@
         async function loadChatsList() {
             try {
                 const res = await fetch('/chats');
-                const chats = await res.json();
+                allChats = await res.json();
                 const container = document.getElementById('contacts-list');
                 
-                if (chats && chats.length > 0) {
-                    container.innerHTML = chats.map(chat => {
+                if (allChats && allChats.length > 0) {
+                    container.innerHTML = allChats.map(chat => {
                         const isActive = chat.jid === currentChatJid ? 'neon-border-active bg-indigo-500/5' : '';
                         const initial = chat.name.charAt(0).toUpperCase();
                         
-                        return `<div onclick="selectChat('${chat.jid}', '${chat.name}', '${chat.phone}')" class="p-3.5 flex items-center space-x-3 space-x-reverse hover:bg-slate-800/20 cursor-pointer transition-all ${isActive}">
+                        // Category tag indicator
+                        let tagColor = 'bg-slate-800 text-slate-400';
+                        if (chat.leadInfo) {
+                            if (chat.leadInfo.category === 'hot') tagColor = 'bg-red-500/10 text-red-400';
+                            else if (chat.leadInfo.category === 'warm') tagColor = 'bg-indigo-500/10 text-indigo-400';
+                            else if (chat.leadInfo.category === 'general') tagColor = 'bg-emerald-500/10 text-emerald-400';
+                        }
+
+                        const categoryAr = chat.leadInfo ? {
+                            'hot': 'مهتم جداً',
+                            'warm': 'مهتم',
+                            'cold': 'بارد',
+                            'general': 'عام'
+                        }[chat.leadInfo.category] || 'عام' : 'عام';
+
+                        return `<div onclick="selectChat('${chat.jid}', '${chat.name}', '${chat.phone}')" class="p-3 flex items-center space-x-3 space-x-reverse hover:bg-slate-800/20 cursor-pointer transition-all ${isActive}">
                             <div class="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-slate-400 font-mono shrink-0">${initial}</div>
                             <div class="flex-1 min-w-0">
                                 <div class="flex justify-between items-center">
                                     <h5 class="text-xs font-bold text-slate-200 truncate">${chat.name}</h5>
                                     <span class="text-[9px] text-slate-500 font-mono">${chat.timestamp}</span>
                                 </div>
-                                <p class="text-[10px] text-slate-400 truncate mt-0.5">${chat.lastMessage || 'لا توجد رسائل بعد'}</p>
+                                <div class="flex justify-between items-center mt-1">
+                                    <p class="text-[9px] text-slate-400 truncate max-w-[120px]">${chat.lastMessage || 'لا توجد رسائل بعد'}</p>
+                                    <span class="px-1.5 py-0.5 rounded text-[8px] font-black ${tagColor}">${categoryAr}</span>
+                                </div>
                             </div>
                         </div>`;
+                    }).join('');
+
+                    // Populate select options in appointments tab selector too
+                    const selector = document.getElementById('appt-jid-select');
+                    selector.innerHTML = '<option value="">تحديد عميل من القائمة...</option>' + allChats.map(c => {
+                        return `<option value="${c.jid}">${c.name} (+${c.phone})</option>`;
                     }).join('');
                 } else {
                     container.innerHTML = '<p class="text-slate-500 text-center py-12 text-xs">لا توجد محادثات CRM نشطة حالياً</p>';
@@ -1360,8 +1622,62 @@
             
             document.getElementById('chat-input-container').classList.remove('hidden');
 
-            loadChatsList(); // Re-render to show active indicator border
+            // Render right CRM profile widget
+            renderCRMProfileWidget(jid, name, phone);
+
+            loadChatsList(); // Re-render list
             loadChatMessages();
+            // Load CRM notes for sidebar
+            loadCRMNotes(jid);
+            // Sync category selector
+            const chat = allChats.find(c => c.jid === jid);
+            const sel = document.getElementById('crm-lead-category-select');
+            if (sel && chat && chat.leadInfo) {
+                sel.value = chat.leadInfo.category || 'general';
+            } else if (sel) {
+                sel.value = 'general';
+            }
+        }
+
+        function renderCRMProfileWidget(jid, name, phone) {
+            const widget = document.getElementById('crm-profile-widget');
+            widget.classList.remove('hidden');
+
+            const chat = allChats.find(c => c.jid === jid);
+            const lead = chat ? chat.leadInfo : null;
+
+            const badge = document.getElementById('lead-badge');
+            
+            if (lead) {
+                document.getElementById('lead-name').innerText = lead.name || name;
+                document.getElementById('lead-phone').innerText = lead.phone ? '+' + lead.phone : '+' + phone;
+                document.getElementById('lead-email').innerText = lead.email || 'غير متوفر';
+                document.getElementById('lead-summary').innerText = lead.summary || 'جاري استخلاص الاحتياجات بالذكاء الاصطناعي...';
+                
+                // Color badges mapping
+                badge.className = "px-3 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider";
+                if (lead.category === 'hot') {
+                    badge.classList.add('bg-red-500/15', 'text-red-400', 'glow-red');
+                    badge.innerText = 'مهتم جداً (HOT)';
+                } else if (lead.category === 'warm') {
+                    badge.classList.add('bg-indigo-500/15', 'text-indigo-400', 'glow-indigo');
+                    badge.innerText = 'مهتم (WARM)';
+                } else if (lead.category === 'cold') {
+                    badge.classList.add('bg-slate-800', 'text-slate-400');
+                    badge.innerText = 'بارد (COLD)';
+                } else {
+                    badge.classList.add('bg-emerald-500/15', 'text-emerald-400', 'glow-green');
+                    badge.innerText = 'استفسار عام';
+                }
+            } else {
+                document.getElementById('lead-name').innerText = name;
+                document.getElementById('lead-phone').innerText = '+' + phone;
+                document.getElementById('lead-email').innerText = 'غير متوفر';
+                document.getElementById('lead-summary').innerText = 'جاري تحليل الاحتياجات فور وصول الرسالة التالية...';
+                
+                badge.className = "px-3 py-0.5 rounded-full text-[9px] font-black bg-slate-800 text-slate-400";
+                badge.innerText = 'عام';
+            }
         }
 
         async function loadChatMessages() {
@@ -1439,6 +1755,158 @@
             if (chatPollInterval) {
                 clearInterval(chatPollInterval);
                 chatPollInterval = null;
+            }
+        }
+
+        function openChatAppointmentModal() {
+            if (!currentChatJid) return;
+            switchTab('appointments');
+            document.getElementById('appt-jid-select').value = currentChatJid;
+        }
+
+        // ============================================
+        // CRM Notes & Lead Category Functions
+        // ============================================
+        async function changeLeadCategory(jid, category) {
+            if (!jid) return;
+            try {
+                await fetch(`/chats/${encodeURIComponent(jid)}/lead-category`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category })
+                });
+                showNotification(`✅ تم تغيير التصنيف إلى: ${category}`, 'success');
+            } catch(e) {
+                showNotification('❌ فشل تغيير التصنيف', 'error');
+            }
+        }
+
+        async function loadCRMNotes(jid) {
+            try {
+                const res = await fetch(`/chats/${encodeURIComponent(jid)}/notes`);
+                const notes = await res.json();
+                const container = document.getElementById('crm-notes-timeline');
+                if (!container) return;
+                if (!notes || notes.length === 0) {
+                    container.innerHTML = '<p class="text-slate-600 text-center py-2">لا توجد ملاحظات مسجلة.</p>';
+                } else {
+                    container.innerHTML = notes.slice().reverse().map(n => `
+                        <div class="bg-slate-900/60 rounded-lg px-2 py-1 border-r-2 border-indigo-500/50">
+                            <p class="text-[9px] text-slate-300">${n.text}</p>
+                            <span class="text-[8px] text-slate-600">${new Date(n.ts).toLocaleString('ar-EG')}</span>
+                        </div>`).join('');
+                }
+            } catch(e) {}
+        }
+
+        async function addCRMNote() {
+            const input = document.getElementById('crm-note-input');
+            if (!input || !currentChatJid || !input.value.trim()) return;
+            const text = input.value.trim();
+            try {
+                await fetch(`/chats/${encodeURIComponent(currentChatJid)}/notes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+                input.value = '';
+                await loadCRMNotes(currentChatJid);
+                showNotification('📝 تم حفظ الملاحظة', 'success');
+            } catch(e) {
+                showNotification('❌ فشل حفظ الملاحظة', 'error');
+            }
+        }
+
+        // ============================================
+        // Appointments Scheduling Calendar Logic
+        // ============================================
+        async function loadAppointments() {
+            try {
+                const res = await fetch('/appointments');
+                const list = await res.json();
+                
+                // Render Table on appointments tab
+                const tbody = document.getElementById('appointments-tbody');
+                if (list && list.length > 0) {
+                    tbody.innerHTML = list.map(item => {
+                        return `<tr class="hover:bg-slate-800/10 transition-all border-b border-slate-800/20 last:border-0">
+                            <td class="py-3 px-4 font-bold text-slate-200">${item.contactName}</td>
+                            <td class="py-3 px-4 text-indigo-400 font-semibold leading-relaxed">${item.title}</td>
+                            <td class="py-3 px-4 text-slate-300 font-mono">${item.dateTime}</td>
+                            <td class="py-3 px-4 text-center">
+                                <button onclick="deleteAppointment('${item.id}')" class="w-8 h-8 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white transition-all text-xs">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>`;
+                    }).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="4" class="py-8 text-center text-slate-500">لا توجد مواعيد مجدولة حالياً.</td></tr>';
+                }
+
+                // Render lists on dashboard panel
+                const dashList = document.getElementById('dashboard-appointments');
+                if (list && list.length > 0) {
+                    dashList.innerHTML = list.slice(0, 4).map(item => {
+                        return `<div class="p-3 bg-indigo-950/10 border border-indigo-500/10 rounded-xl space-y-1 text-right glow-indigo">
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs font-bold text-slate-200 truncate">${item.contactName}</span>
+                                <span class="text-[8px] text-indigo-400 font-mono font-bold">${item.dateTime}</span>
+                            </div>
+                            <p class="text-[9px] text-slate-400 truncate">${item.title}</p>
+                        </div>`;
+                    }).join('');
+                } else {
+                    dashList.innerHTML = '<p class="text-[10px] text-slate-500 text-center py-6">لا توجد مواعيد مجدولة قريباً</p>';
+                }
+
+            } catch (err) {
+                console.error("Failed to load appointments:", err);
+            }
+        }
+
+        async function createManualAppointment() {
+            const jid = document.getElementById('appt-jid-select').value;
+            const dateTime = document.getElementById('appt-datetime').value.trim();
+            const title = document.getElementById('appt-title').value.trim();
+
+            if (!dateTime || !title) {
+                alert("الرجاء إدخال التاريخ وتفاصيل التذكير لحفظ الموعد.");
+                return;
+            }
+
+            try {
+                const res = await fetch('/appointments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ jid, dateTime, title })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('appt-datetime').value = '';
+                    document.getElementById('appt-title').value = '';
+                    loadAppointments();
+                    alert("📅 تم حفظ التذكير بالتقويم بنجاح!");
+                }
+            } catch (err) {
+                alert("فشل إضافة الموعد: " + err.message);
+            }
+        }
+
+        async function deleteAppointment(id) {
+            if (!confirm("هل أنت متأكد من رغبتك في حذف هذا الموعد؟")) return;
+            try {
+                const res = await fetch('/appointments/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    loadAppointments();
+                }
+            } catch (err) {
+                alert("فشل حذف الموعد: " + err.message);
             }
         }
 
