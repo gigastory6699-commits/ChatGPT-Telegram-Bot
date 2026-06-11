@@ -38,6 +38,14 @@ async function sendTelegramMessage(text) {
     }
 }
 
+function escapeHtml(str) {
+    if (!str) return "";
+    return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+
 async function handleIncomingWhatsAppMessage(msg) {
     const senderJid = msg.key.remoteJid;
     const senderNumber = senderJid.split('@')[0];
@@ -61,11 +69,14 @@ async function handleIncomingWhatsAppMessage(msg) {
         text = `[رسالة غير مدعومة]`;
     }
     
+    const escapedText = escapeHtml(text);
+    const escapedSenderName = escapeHtml(senderName);
+    
     const notification = 
         `💬 <b>رسالة جديدة من واتساب</b>\n\n` +
-        `👤 <b>المرسل:</b> ${senderName}\n` +
+        `👤 <b>المرسل:</b> ${escapedSenderName}\n` +
         `📱 <b>الرقم:</b> <code>+${senderNumber}</code>\n\n` +
-        `📝 <b>الرسالة:</b>\n${text}\n\n` +
+        `📝 <b>الرسالة:</b>\n${escapedText}\n\n` +
         `_________________\n` +
         `<i>رد على هذه الرسالة للرد على المرسل في واتساب.</i>\n` +
         `[From: <code>${senderJid}</code>]`;
