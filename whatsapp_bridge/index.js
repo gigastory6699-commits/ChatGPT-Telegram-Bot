@@ -16,6 +16,7 @@ let sock = null;
 let qrCode = null;
 let connectionState = 'DISCONNECTED';
 let telegramChatId = null;
+let reconnectTimeout = null;
 
 const app = express();
 app.use(bodyParser.json());
@@ -87,10 +88,15 @@ async function handleIncomingWhatsAppMessage(msg) {
 async function initWhatsApp(chatId, pairPhone = null) {
     telegramChatId = chatId;
     
+    if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+    }
+    
     if (!fs.existsSync('session')) {
         fs.mkdirSync('session');
     }
-    fs.writeFileSync('session/telegram_chat_id.txt', chatId);
+    fs.writeFileSync('session/telegram_chat_id.txt', String(chatId));
 
     // Delete any old QR code files to avoid serving stale QRs
     if (fs.existsSync('session/qr.png')) {
@@ -139,7 +145,12 @@ async function initWhatsApp(chatId, pairPhone = null) {
             sock = null;
             connectionState = 'DISCONNECTED';
             if (shouldReconnect) {
-                initWhatsApp(telegramChatId);
+                if (!reconnectTimeout) {
+                    reconnectTimeout = setTimeout(() => {
+                        reconnectTimeout = null;
+                        initWhatsApp(telegramChatId);
+                    }, 5000);
+                }
             }
         } else if (connection === 'open') {
             console.log('WhatsApp connection opened successfully!');
