@@ -102,7 +102,10 @@ async function initWhatsApp(chatId, pairPhone = null) {
     }
     qrCode = null;
 
+    console.log(`initWhatsApp called for chatId: ${chatId}, pairPhone: ${pairPhone}`);
+
     if (sock && !pairPhone) {
+        console.log("Baileys socket already initialized, skipping init.");
         return null;
     }
 
@@ -111,17 +114,23 @@ async function initWhatsApp(chatId, pairPhone = null) {
     sock = makeWASocket({
         auth: state,
         printQRInTerminal: false,
-        logger: pino({ level: 'silent' })
+        logger: pino({ level: 'error' })
     });
     
     sock.ev.on('creds.update', saveCreds);
     
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
+        console.log("Connection update:", { connection, lastDisconnect: lastDisconnect ? lastDisconnect.message : null, qr: !!qr });
+        
         if (qr) {
             qrCode = qr;
-            await QRCode.toFile('./session/qr.png', qr);
-            console.log("QR code saved to session/qr.png");
+            try {
+                await QRCode.toFile('./session/qr.png', qr);
+                console.log("QR code saved to session/qr.png");
+            } catch (err) {
+                console.error("Failed to save QR code file:", err);
+            }
         }
         
         if (connection === 'close') {
