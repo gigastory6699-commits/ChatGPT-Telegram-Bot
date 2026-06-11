@@ -110,9 +110,30 @@ async function initWhatsApp(chatId, pairPhone = null) {
 
     console.log(`initWhatsApp called for chatId: ${chatId}, pairPhone: ${pairPhone}`);
 
-    if (sock && !pairPhone) {
-        console.log("Baileys socket already initialized, skipping init.");
+    if (sock && connectionState === 'CONNECTED' && !pairPhone) {
+        console.log("Baileys socket already connected, skipping init.");
         return null;
+    }
+
+    if (connectionState !== 'CONNECTED') {
+        console.log("Clearing old session credentials to generate fresh QR code.");
+        if (fs.existsSync('session/creds.json')) {
+            try {
+                fs.unlinkSync('session/creds.json');
+            } catch (err) {
+                console.error("Failed to delete credentials file:", err.message);
+            }
+        }
+    }
+
+    if (sock) {
+        console.log("Closing existing disconnected socket to re-initialize.");
+        try {
+            sock.end();
+        } catch (e) {
+            console.error("Error closing old socket:", e);
+        }
+        sock = null;
     }
 
     const { state, saveCreds } = await useMultiFileAuthState('session');
