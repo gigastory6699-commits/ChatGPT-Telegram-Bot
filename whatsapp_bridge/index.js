@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -85,7 +85,7 @@ async function handleIncomingWhatsAppMessage(msg) {
     await sendTelegramMessage(notification);
 }
 
-async function initWhatsApp(chatId, pairPhone = null) {
+async function initWhatsApp(chatId, pairPhone = null, forceNewSession = false) {
     telegramChatId = chatId;
     
     if (reconnectTimeout) {
@@ -108,15 +108,15 @@ async function initWhatsApp(chatId, pairPhone = null) {
     }
     qrCode = null;
 
-    console.log(`initWhatsApp called for chatId: ${chatId}, pairPhone: ${pairPhone}`);
+    console.log(`initWhatsApp called for chatId: ${chatId}, pairPhone: ${pairPhone}, forceNewSession: ${forceNewSession}`);
 
     if (sock && connectionState === 'CONNECTED' && !pairPhone) {
         console.log("Baileys socket already connected, skipping init.");
         return null;
     }
 
-    if (connectionState !== 'CONNECTED') {
-        console.log("Clearing old session credentials to generate fresh QR code.");
+    if (forceNewSession) {
+        console.log("Clearing old session credentials to generate fresh QR code (forced new session).");
         if (fs.existsSync('session/creds.json')) {
             try {
                 fs.unlinkSync('session/creds.json');
@@ -136,12 +136,25 @@ async function initWhatsApp(chatId, pairPhone = null) {
         sock = null;
     }
 
+    let version = [2, 3000, 1015901307]; // Fallback version
+    try {
+        const { version: latestVersion } = await fetchLatestBaileysVersion();
+        version = latestVersion;
+        console.log(`Using latest WA version: ${version.join('.')}`);
+    } catch (err) {
+        console.warn("Failed to fetch latest WA version, using fallback:", err.message);
+    }
+
     const { state, saveCreds } = await useMultiFileAuthState('session');
     
     sock = makeWASocket({
+        version,
         auth: state,
         printQRInTerminal: false,
-        logger: pino({ level: 'error' })
+        logger: pino({ level: 'error' }),
+        connectTimeoutMs: 30000,
+        defaultQueryTimeoutMs: 30000,
+        keepAliveIntervalMs: 10000
     });
     
     sock.ev.on('creds.update', saveCreds);
@@ -171,6 +184,15 @@ async function initWhatsApp(chatId, pairPhone = null) {
                         reconnectTimeout = null;
                         initWhatsApp(telegramChatId);
                     }, 5000);
+                }
+            } else {
+                console.log("Logged out from WhatsApp. Clearing session credentials.");
+                if (fs.existsSync('session/creds.json')) {
+                    try {
+                        fs.unlinkSync('session/creds.json');
+                    } catch (err) {
+                        console.error("Failed to delete credentials file:", err.message);
+                    }
                 }
             }
         } else if (connection === 'open') {
@@ -229,7 +251,7 @@ app.get('/status', (req, res) => {
 app.post('/init', async (req, res) => {
     const { chat_id } = req.body;
     try {
-        await initWhatsApp(chat_id);
+        await initWhatsApp(chat_id, null, true);
         res.json({ success: true, state: connectionState });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -240,7 +262,7 @@ app.post('/pair', async (req, res) => {
     const { phone, chat_id } = req.body;
     try {
         const cleanPhone = phone.replace(/[^0-9]/g, '');
-        const code = await initWhatsApp(chat_id, cleanPhone);
+        const code = await initWhatsApp(chat_id, cleanPhone, true);
         res.json({ success: true, code: code });
     } catch (e) {
         res.status(500).json({ error: e.message });
