@@ -16,6 +16,7 @@ import config
 from config import (
     WEB_HOOK,
     PORT,
+    WA_PORT,
     BOT_TOKEN,
     GET_MODELS,
     Users,
@@ -44,7 +45,7 @@ from utils.i18n import strings
 from utils.scripts import GetMesageInfo, safe_get, is_emoji
 
 from telegram.constants import ChatAction
-from telegram import BotCommand, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent, Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InputMediaPhoto, InlineKeyboardButton
+from telegram import BotCommand, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent, Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, InputMediaPhoto, InlineKeyboardButton, WebAppInfo
 from telegram.ext import CommandHandler, MessageHandler, ApplicationBuilder, filters, CallbackQueryHandler, Application, AIORateLimiter, InlineQueryHandler, ContextTypes
 from datetime import timedelta
 
@@ -196,7 +197,7 @@ async def command_bot(update, context, title="", has_command=True):
                     try:
                         import httpx
                         async with httpx.AsyncClient(timeout=30) as client:
-                            r = await client.post("http://localhost:5001/send", json={
+                            r = await client.post(f"http://localhost:{WA_PORT}/send", json={
                                 "to": whatsapp_jid,
                                 "message": reply_content
                             })
@@ -270,7 +271,7 @@ async def command_bot(update, context, title="", has_command=True):
                     import httpx
                     async with httpx.AsyncClient(timeout=5) as client:
                         try:
-                            status_r = await client.get("http://localhost:5001/status")
+                            status_r = await client.get(f"http://localhost:{WA_PORT}/status")
                             if status_r.status_code == 200 and status_r.json().get("state") == "CONNECTED":
                                 await context.bot.send_message(
                                     chat_id=chatid,
@@ -282,7 +283,7 @@ async def command_bot(update, context, title="", has_command=True):
                             logger.error(f"Status check failed: {status_err}")
 
                     async with httpx.AsyncClient(timeout=30) as client:
-                        r = await client.post("http://localhost:5001/pair", json={"phone": clean_msg, "chat_id": chatid})
+                        r = await client.post(f"http://localhost:{WA_PORT}/pair", json={"phone": clean_msg, "chat_id": chatid})
                         if r.status_code == 200:
                             data = r.json()
                             code = data.get("code")
@@ -1330,22 +1331,27 @@ async def button_press(update, context):
             chatid = update.effective_chat.id
             
             # Fetch current status
+            import os
+            domain = os.environ.get("RAILWAY_STATIC_URL", "")
+            web_app_url = f"https://{domain}/panel" if domain else f"http://localhost:{WA_PORT}/panel"
+            
             import httpx
             status_text = "🔴 **البوت غير متصل بـ WhatsApp حالياً**"
             keyboard_buttons = [
+                [InlineKeyboardButton("فتح لوحة التحكم 🌐 (Web App)", web_app=WebAppInfo(url=web_app_url))],
                 [InlineKeyboardButton("الربط بالرقم (+20) 📱", callback_data="WA_LINK_PHONE")],
                 [InlineKeyboardButton("الربط برمز QR 🔗", callback_data="WA_LINK_QR")],
                 [InlineKeyboardButton("⬅️ رجوع / Back", callback_data="PLUGINS")]
             ]
             try:
                 async with httpx.AsyncClient(timeout=5) as client:
-                    r = await client.get("http://localhost:5001/status")
+                    r = await client.get(f"http://localhost:{WA_PORT}/status")
                     if r.status_code == 200:
                         status_data = r.json()
                         if status_data.get("state") == "CONNECTED":
                             ai_status = "تفعيل"
                             try:
-                                r_config = await client.get("http://localhost:5001/config")
+                                r_config = await client.get(f"http://localhost:{WA_PORT}/config")
                                 if r_config.status_code == 200:
                                     config_data = r_config.json()
                                     if config_data.get("ai_auto_reply") is True:
@@ -1399,7 +1405,7 @@ async def button_press(update, context):
             try:
                 import httpx
                 async with httpx.AsyncClient(timeout=5) as client:
-                    r = await client.get("http://localhost:5001/status")
+                    r = await client.get(f"http://localhost:{WA_PORT}/status")
                     if r.status_code == 200 and r.json().get("state") == "CONNECTED":
                         await callback_query.answer("⚠️ واتساب متصل بالفعل!")
                         await context.bot.send_message(
@@ -1432,7 +1438,7 @@ async def button_press(update, context):
             try:
                 import httpx
                 async with httpx.AsyncClient(timeout=5) as client:
-                    r = await client.get("http://localhost:5001/status")
+                    r = await client.get(f"http://localhost:{WA_PORT}/status")
                     if r.status_code == 200 and r.json().get("state") == "CONNECTED":
                         await callback_query.answer("⚠️ واتساب متصل بالفعل!")
                         await context.bot.send_message(
@@ -1456,7 +1462,7 @@ async def button_press(update, context):
                 import asyncio
                 async with httpx.AsyncClient(timeout=20) as client:
                     # 1. Initialize WhatsApp connection
-                    await client.post("http://localhost:5001/init", json={"chat_id": chatid})
+                    await client.post(f"http://localhost:{WA_PORT}/init", json={"chat_id": chatid})
                     
                     # 2. Wait for QR code generation
                     qr_path = "whatsapp_bridge/session/qr.png"
@@ -1512,7 +1518,7 @@ async def button_press(update, context):
             try:
                 import httpx
                 async with httpx.AsyncClient(timeout=20) as client:
-                    r = await client.post("http://localhost:5001/disconnect")
+                    r = await client.post(f"http://localhost:{WA_PORT}/disconnect")
                     if r.status_code == 200:
                         await context.bot.send_message(
                             chat_id=chatid,
@@ -1539,8 +1545,12 @@ async def button_press(update, context):
                     pass
                 
                 # Show main settings menu again
+                import os
+                domain = os.environ.get("RAILWAY_STATIC_URL", "")
+                web_app_url = f"https://{domain}/panel" if domain else f"http://localhost:{WA_PORT}/panel"
                 status_text = "🔴 **البوت غير متصل بـ WhatsApp حالياً**"
                 keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("فتح لوحة التحكم 🌐 (Web App)", web_app=WebAppInfo(url=web_app_url))],
                     [InlineKeyboardButton("الربط بالرقم (+20) 📱", callback_data="WA_LINK_PHONE")],
                     [InlineKeyboardButton("الربط برمز QR 🔗", callback_data="WA_LINK_QR")],
                     [InlineKeyboardButton("⬅️ رجوع / Back", callback_data="PLUGINS")]
@@ -1561,13 +1571,13 @@ async def button_press(update, context):
             try:
                 import httpx
                 async with httpx.AsyncClient(timeout=10) as client:
-                    r_config = await client.get("http://localhost:5001/config")
+                    r_config = await client.get(f"http://localhost:{WA_PORT}/config")
                     current_ai = False
                     if r_config.status_code == 200:
                         current_ai = r_config.json().get("ai_auto_reply", False)
                     
                     new_ai = not current_ai
-                    r_toggle = await client.post("http://localhost:5001/config", json={"ai_auto_reply": new_ai})
+                    r_toggle = await client.post(f"http://localhost:{WA_PORT}/config", json={"ai_auto_reply": new_ai})
                     if r_toggle.status_code == 200:
                         status_word = "تفعيل" if new_ai else "تعطيل"
                         await callback_query.answer(f"✅ تم {status_word} الرد التلقائي بنجاح!")
@@ -1578,21 +1588,26 @@ async def button_press(update, context):
                 await callback_query.answer("❌ فشل تعديل إعداد الرد التلقائي")
             
             # Re-render status screen
+            import os
+            domain = os.environ.get("RAILWAY_STATIC_URL", "")
+            web_app_url = f"https://{domain}/panel" if domain else f"http://localhost:{WA_PORT}/panel"
+            
             import httpx
             status_text = "🔴 **البوت غير متصل بـ WhatsApp حالياً**"
             keyboard_buttons = [
+                [InlineKeyboardButton("فتح لوحة التحكم 🌐 (Web App)", web_app=WebAppInfo(url=web_app_url))],
                 [InlineKeyboardButton("الربط بالرقم (+20) 📱", callback_data="WA_LINK_PHONE")],
                 [InlineKeyboardButton("الربط برمز QR 🔗", callback_data="WA_LINK_QR")],
                 [InlineKeyboardButton("⬅️ رجوع / Back", callback_data="PLUGINS")]
             ]
             try:
                 async with httpx.AsyncClient(timeout=5) as client:
-                    r = await client.get("http://localhost:5001/status")
+                    r = await client.get(f"http://localhost:{WA_PORT}/status")
                     if r.status_code == 200:
                         status_data = r.json()
                         if status_data.get("state") == "CONNECTED":
                             try:
-                                r_config = await client.get("http://localhost:5001/config")
+                                r_config = await client.get(f"http://localhost:{WA_PORT}/config")
                                 if r_config.status_code == 200:
                                     config_data = r_config.json()
                                     ai_auto = config_data.get("ai_auto_reply", False)
@@ -1607,6 +1622,7 @@ async def button_press(update, context):
                                         f"• نوع الرد التلقائي: `{'صوتي (ميكروفون)' if ai_voice else 'نصي كتابي'}`"
                                     )
                                     keyboard_buttons = [
+                                        [InlineKeyboardButton("فتح لوحة التحكم 🌐 (Web App)", web_app=WebAppInfo(url=web_app_url))],
                                         [InlineKeyboardButton(f"{ai_auto_word} الرد التلقائي", callback_data="WA_TOGGLE_AI")],
                                         [InlineKeyboardButton(f"{ai_voice_word} الرد الصوتي", callback_data="WA_TOGGLE_VOICE")],
                                         [InlineKeyboardButton("قطع الاتصال ⚠️ / Disconnect", callback_data="WA_DISCONNECT")],
@@ -1635,13 +1651,13 @@ async def button_press(update, context):
             try:
                 import httpx
                 async with httpx.AsyncClient(timeout=10) as client:
-                    r_config = await client.get("http://localhost:5001/config")
+                    r_config = await client.get(f"http://localhost:{WA_PORT}/config")
                     current_voice = False
                     if r_config.status_code == 200:
                         current_voice = r_config.json().get("ai_voice_reply", False)
                     
                     new_voice = not current_voice
-                    r_toggle = await client.post("http://localhost:5001/config", json={"ai_voice_reply": new_voice})
+                    r_toggle = await client.post(f"http://localhost:{WA_PORT}/config", json={"ai_voice_reply": new_voice})
                     if r_toggle.status_code == 200:
                         status_word = "تفعيل" if new_voice else "تعطيل"
                         await callback_query.answer(f"✅ تم {status_word} الرد الصوتي بنجاح!")
@@ -1652,21 +1668,26 @@ async def button_press(update, context):
                 await callback_query.answer("❌ فشل تعديل إعداد الرد الصوتي")
             
             # Re-render status screen
+            import os
+            domain = os.environ.get("RAILWAY_STATIC_URL", "")
+            web_app_url = f"https://{domain}/panel" if domain else f"http://localhost:{WA_PORT}/panel"
+            
             import httpx
             status_text = "🔴 **البوت غير متصل بـ WhatsApp حالياً**"
             keyboard_buttons = [
+                [InlineKeyboardButton("فتح لوحة التحكم 🌐 (Web App)", web_app=WebAppInfo(url=web_app_url))],
                 [InlineKeyboardButton("الربط بالرقم (+20) 📱", callback_data="WA_LINK_PHONE")],
                 [InlineKeyboardButton("الربط برمز QR 🔗", callback_data="WA_LINK_QR")],
                 [InlineKeyboardButton("⬅️ رجوع / Back", callback_data="PLUGINS")]
             ]
             try:
                 async with httpx.AsyncClient(timeout=5) as client:
-                    r = await client.get("http://localhost:5001/status")
+                    r = await client.get(f"http://localhost:{WA_PORT}/status")
                     if r.status_code == 200:
                         status_data = r.json()
                         if status_data.get("state") == "CONNECTED":
                             try:
-                                r_config = await client.get("http://localhost:5001/config")
+                                r_config = await client.get(f"http://localhost:{WA_PORT}/config")
                                 if r_config.status_code == 200:
                                     config_data = r_config.json()
                                     ai_auto = config_data.get("ai_auto_reply", False)
@@ -1681,6 +1702,7 @@ async def button_press(update, context):
                                         f"• نوع الرد التلقائي: `{'صوتي (ميكروفون)' if ai_voice else 'نصي كتابي'}`"
                                     )
                                     keyboard_buttons = [
+                                        [InlineKeyboardButton("فتح لوحة التحكم 🌐 (Web App)", web_app=WebAppInfo(url=web_app_url))],
                                         [InlineKeyboardButton(f"{ai_auto_word} الرد التلقائي", callback_data="WA_TOGGLE_AI")],
                                         [InlineKeyboardButton(f"{ai_voice_word} الرد الصوتي", callback_data="WA_TOGGLE_VOICE")],
                                         [InlineKeyboardButton("قطع الاتصال ⚠️ / Disconnect", callback_data="WA_DISCONNECT")],

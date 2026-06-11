@@ -6,11 +6,12 @@ const axios = require('axios');
 const dotenv = require('dotenv');
 const fs = require('fs');
 const QRCode = require('qrcode');
+const path = require('path');
 
 dotenv.config({ path: '../.env' });
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const PORT = 5001;
+const PORT = process.env.PORT || 5001;
 
 let sock = null;
 let qrCode = null;
@@ -529,6 +530,22 @@ app.post('/config', (req, res) => {
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
+});
+
+app.get('/qr.png', (req, res) => {
+    if (fs.existsSync('session/qr.png')) {
+        res.sendFile(path.resolve('session/qr.png'));
+    } else {
+        res.status(404).send('No QR code generated yet');
+    }
+});
+
+app.get('/', (req, res) => {
+    res.sendFile(path.resolve('panel.html'));
+});
+
+app.get('/panel', (req, res) => {
+    res.sendFile(path.resolve('panel.html'));
 });
 
 app.listen(PORT, () => {
