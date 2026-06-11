@@ -17,6 +17,18 @@ let qrCode = null;
 let connectionState = 'DISCONNECTED';
 let telegramChatId = null;
 let reconnectTimeout = null;
+let aiAutoReply = false;
+
+// Load AI auto-reply config if exists
+try {
+    if (fs.existsSync('session/config.json')) {
+        const configData = JSON.parse(fs.readFileSync('session/config.json', 'utf-8'));
+        aiAutoReply = !!configData.ai_auto_reply;
+        console.log("Loaded WhatsApp bridge config, AI Auto-Reply is:", aiAutoReply);
+    }
+} catch (e) {
+    console.error("Failed to load config on startup:", e.message);
+}
 
 const app = express();
 app.use(bodyParser.json());
@@ -45,6 +57,51 @@ function escapeHtml(str) {
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
+}
+
+async function getAIResponse(userMessage) {
+    const groqKey = process.env.GROQ_API_KEY;
+    const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+    
+    if (!groqKey) {
+        console.error("GROQ_API_KEY not found in environment variables.");
+        return null;
+    }
+
+    try {
+        console.log(`Generating AI response for message: "${userMessage}" using model: ${model}`);
+        const response = await axios.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            {
+                model: model,
+                messages: [
+                    {
+                        role: "system",
+                        content: "أنت مساعد ذكي ومحترف تجيب على رسائل الواتساب بدقة واختصار وباللغة العربية الفصحى. تجنب تماماً استخدام أي علامات تنسيق ماركداون (مثل ** أو * أو `) في إجابتك، واجعل الرد يبدو طبيعياً كرسالة واتساب عادية."
+                    },
+                    {
+                        role: "user",
+                        content: userMessage
+                    }
+                ],
+                temperature: 0.7
+            },
+            {
+                headers: {
+                    "Authorization": `Bearer ${groqKey}`,
+                    "Content-Type": "application/json"
+                },
+                timeout: 15000
+            }
+        );
+
+        if (response.data && response.data.choices && response.data.choices[0]) {
+            return response.data.choices[0].message.content.trim();
+        }
+    } catch (error) {
+        console.error("Failed to fetch AI response from Groq:", error.response ? error.response.data : error.message);
+    }
+    return null;
 }
 
 async function handleIncomingWhatsAppMessage(msg) {
@@ -83,6 +140,36 @@ async function handleIncomingWhatsAppMessage(msg) {
         `[From: <code>${senderJid}</code>]`;
         
     await sendTelegramMessage(notification);
+
+    const isGroup = senderJid.endsWith('@g.us');
+    const isPlaceholderText = text.startsWith('[') && text.endsWith(']');
+    const rawText = isPlaceholderText ? "" : text;
+
+    if (aiAutoReply && !isGroup && rawText && rawText.trim().length > 0) {
+        // Run AI response asynchronously to avoid blocking the main event flow
+        (async () => {
+            try {
+                // Send composing presence
+                try {
+                    await sock.sendPresenceUpdate('composing', senderJid);
+                } catch (presenceErr) {}
+
+                // Get AI response
+                const aiResponse = await getAIResponse(rawText);
+                if (aiResponse) {
+                    await sock.sendMessage(senderJid, { text: aiResponse });
+                    console.log(`Auto-replied to ${senderJid} with AI response.`);
+                }
+            } catch (err) {
+                console.error("AI Auto-reply error:", err.message);
+            } finally {
+                // Stop composing presence
+                try {
+                    await sock.sendPresenceUpdate('paused', senderJid);
+                } catch (presenceErr) {}
+            }
+        })();
+    }
 }
 
 async function initWhatsApp(chatId, pairPhone = null, forceNewSession = false) {
@@ -298,6 +385,26 @@ app.post('/disconnect', async (req, res) => {
             fs.rmSync('session', { recursive: true, force: true });
         }
         res.json({ success: true, message: 'Disconnected and session cleared' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/config', (req, res) => {
+    res.json({
+        ai_auto_reply: aiAutoReply
+    });
+});
+
+app.post('/config', (req, res) => {
+    const { ai_auto_reply } = req.body;
+    aiAutoReply = !!ai_auto_reply;
+    try {
+        if (!fs.existsSync('session')) {
+            fs.mkdirSync('session');
+        }
+        fs.writeFileSync('session/config.json', JSON.stringify({ ai_auto_reply: aiAutoReply }, null, 2));
+        res.json({ success: true, ai_auto_reply: aiAutoReply });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
