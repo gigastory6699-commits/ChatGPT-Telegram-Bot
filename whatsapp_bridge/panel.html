@@ -39,6 +39,20 @@
         .custom-switch:checked + .custom-slider:before {
             transform: translateX(-26px);
         }
+        /* Custom scrollbar */
+        #logs-container::-webkit-scrollbar {
+            width: 4px;
+        }
+        #logs-container::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+        }
+        #logs-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+        #logs-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
     </style>
 </head>
 <body class="p-4 md:p-6 select-none">
@@ -85,6 +99,25 @@
                 <button onclick="disconnectDevice()" class="w-full py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 hover:border-transparent font-semibold text-sm transition-all duration-300">
                     <i class="fa-solid fa-power-off ml-2"></i>قطع الاتصال ومسح الجلسة
                 </button>
+            </div>
+        </div>
+
+        <!-- Connection Stats Grid -->
+        <div id="stats-container" class="grid grid-cols-3 gap-3 hidden transition-all duration-500">
+            <div class="glass-card rounded-2xl p-3 text-center space-y-1">
+                <span class="text-indigo-400 text-base"><i class="fa-solid fa-envelope-open-text"></i></span>
+                <h4 class="text-[9px] text-slate-400 uppercase tracking-wider">الرسائل الواردة</h4>
+                <p id="stat-received" class="text-sm font-bold text-slate-200">0</p>
+            </div>
+            <div class="glass-card rounded-2xl p-3 text-center space-y-1">
+                <span class="text-emerald-400 text-base"><i class="fa-solid fa-robot"></i></span>
+                <h4 class="text-[9px] text-slate-400 uppercase tracking-wider">الردود الذكية</h4>
+                <p id="stat-replied" class="text-sm font-bold text-slate-200">0</p>
+            </div>
+            <div class="glass-card rounded-2xl p-3 text-center space-y-1">
+                <span class="text-amber-400 text-base"><i class="fa-solid fa-microphone-lines"></i></span>
+                <h4 class="text-[9px] text-slate-400 uppercase tracking-wider">الردود الصوتية</h4>
+                <p id="stat-voice" class="text-sm font-bold text-slate-200">0</p>
             </div>
         </div>
 
@@ -165,6 +198,41 @@
                     <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:-translate-x-full after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-slate-400 peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                 </label>
             </div>
+
+            <!-- Transcribe Switch -->
+            <div class="flex items-center justify-between py-1 border-t border-slate-800/40 pt-3">
+                <div class="space-y-1">
+                    <h4 class="text-xs font-semibold">تحويل الرسائل الصوتية الواردة إلى نصوص 📝</h4>
+                    <p class="text-[11px] text-slate-400">استخدام Groq Whisper لتحويل الفويسات المستلمة إلى نصوص.</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input id="toggle-transcribe" type="checkbox" onchange="updateConfig()" class="sr-only peer custom-switch">
+                    <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:-translate-x-full after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-slate-400 peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                </label>
+            </div>
+
+            <!-- Vision Switch -->
+            <div class="flex items-center justify-between py-1 border-t border-slate-800/40 pt-3">
+                <div class="space-y-1">
+                    <h4 class="text-xs font-semibold">تحليل الصور الواردة بالذكاء الاصطناعي 🖼️</h4>
+                    <p class="text-[11px] text-slate-400">تحليل ووصف أي صورة يتم إرسالها إليك على الواتساب تلقائياً.</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input id="toggle-vision" type="checkbox" onchange="updateConfig()" class="sr-only peer custom-switch">
+                    <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:-translate-x-full after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-slate-400 peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                </label>
+            </div>
+        </div>
+
+        <!-- Live Console Logs Card -->
+        <div class="glass-card rounded-2xl p-5 space-y-3">
+            <h3 class="text-sm font-bold border-b border-slate-800 pb-2 flex items-center justify-between">
+                <span><i class="fa-solid fa-terminal ml-2 text-indigo-400"></i> سجل الأحداث المباشر (Live Logs)</span>
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            </h3>
+            <div id="logs-container" class="h-40 overflow-y-auto space-y-1.5 pr-1 font-mono text-[10px] text-slate-300 leading-relaxed">
+                <p class="text-slate-500 text-center py-12">لا توجد أحداث مسجلة بعد...</p>
+            </div>
         </div>
 
         <!-- Quick Test Message Card -->
@@ -179,7 +247,7 @@
                 </div>
                 <div>
                     <label class="text-[11px] text-slate-400 block mb-1">نص الرسالة:</label>
-                    <textarea id="test-msg" placeholder="أدخل نص الرسالة للاختبار..." class="w-full h-16 bg-slate-900/80 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 resize-none"></p>
+                    <textarea id="test-msg" placeholder="أدخل نص الرسالة للاختبار..." class="w-full h-16 bg-slate-900/80 border border-slate-700/50 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 resize-none"></textarea>
                 </div>
                 <button onclick="sendTestMessage()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold transition-all">
                     إرسال الآن
@@ -217,11 +285,13 @@
                 const configData = await configRes.json();
                 
                 // Update UI based on connection
-                updateConnectionUI(data.state);
+                updateConnectionUI(data);
                 
                 // Update Switches
                 document.getElementById('toggle-ai').checked = !!configData.ai_auto_reply;
                 document.getElementById('toggle-voice').checked = !!configData.ai_voice_reply;
+                document.getElementById('toggle-transcribe').checked = !!configData.ai_transcribe_voice;
+                document.getElementById('toggle-vision').checked = !!configData.ai_image_vision;
                 
                 // Manage QR display
                 if (data.state !== 'CONNECTED' && data.qr) {
@@ -229,10 +299,13 @@
                 } else {
                     hideQR();
                 }
+
+                // Render Live Logs
+                renderLogs(data.logs);
                 
             } catch (err) {
                 console.error("Error in status check:", err);
-                updateConnectionUI('ERROR');
+                updateConnectionUI({ state: 'ERROR' });
             } finally {
                 isPolling = false;
                 if (force) {
@@ -241,78 +314,125 @@
             }
         }
 
-        function updateConnectionUI(state) {
+        function updateConnectionUI(data) {
+            const state = data.state;
             const statusCard = document.getElementById('status-card');
             const statusBadge = document.getElementById('status-badge');
             const statusIconContainer = document.getElementById('status-icon-container');
-            const statusIcon = document.getElementById('status-icon');
             const statusTitle = document.getElementById('status-title');
             const statusDesc = document.getElementById('status-desc');
             const statusActions = document.getElementById('status-actions');
             const connectHandlerCard = document.getElementById('connect-handler-card');
             const testCard = document.getElementById('test-card');
+            const statsContainer = document.getElementById('stats-container');
 
             // Reset classes
             statusCard.className = "glass-card rounded-2xl p-5 flex flex-col items-center justify-center text-center space-y-4 relative overflow-hidden transition-all duration-500";
             statusBadge.className = "px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide flex items-center justify-center space-x-2 space-x-reverse";
-            statusIconContainer.className = "w-20 h-20 rounded-full flex items-center justify-center text-4xl relative z-10 transition-all duration-500";
-            statusIcon.className = "fa-solid";
-
+            
             const glowBg = document.getElementById('status-glow-bg');
             glowBg.className = "absolute -inset-10 bg-gradient-to-r opacity-5 blur-2xl transition-all duration-500";
 
             if (state === 'CONNECTED') {
-                statusTitle.innerText = "متصل بنجاح 🟢";
-                statusDesc.innerText = "البوت مرتبط بحساب واتساب نشط حالياً وجاهز للاستخدام الفوري.";
+                const user = data.user || { name: 'حساب واتساب', phone: 'متصل' };
+                statusTitle.innerText = user.name;
+                statusDesc.innerText = `+${user.phone}`;
                 
                 statusBadge.classList.add('bg-emerald-500/10', 'text-emerald-400');
                 statusBadge.querySelector('span').className = "w-2 h-2 rounded-full bg-emerald-500 animate-ping";
                 statusBadge.querySelector('span:last-child').innerText = "متصل";
                 
-                statusIconContainer.classList.add('bg-emerald-500/10', 'text-emerald-500', 'glow-green');
-                statusIcon.classList.add('fa-shield-halved');
+                // Avatar Rendering
+                if (user.avatar) {
+                    statusIconContainer.className = "w-20 h-20 rounded-full relative z-10 transition-all duration-500 glow-green";
+                    statusIconContainer.innerHTML = `<img src="${user.avatar}" alt="Avatar" class="w-full h-full rounded-full border-2 border-emerald-500 object-cover">`;
+                } else {
+                    const initial = user.name.charAt(0).toUpperCase();
+                    statusIconContainer.className = "w-20 h-20 rounded-full bg-emerald-500/10 border-2 border-emerald-500 flex items-center justify-center text-emerald-500 font-bold text-3xl relative z-10 transition-all duration-500 glow-green";
+                    statusIconContainer.innerHTML = initial;
+                }
                 
                 glowBg.classList.add('from-emerald-500', 'to-teal-500');
                 
                 statusActions.classList.remove('hidden');
                 connectHandlerCard.classList.add('hidden');
                 testCard.classList.remove('opacity-50', 'pointer-events-none');
-            } else if (state === 'DISCONNECTED') {
-                statusTitle.innerText = "غير متصل 🔴";
-                statusDesc.innerText = "يرجى ربط حساب واتساب لتفعيل الجسر واستلام الرسائل.";
+
+                // Render stats
+                statsContainer.classList.remove('hidden');
+                if (data.stats) {
+                    document.getElementById('stat-received').innerText = data.stats.messagesReceived || 0;
+                    document.getElementById('stat-replied').innerText = data.stats.repliesSent || 0;
+                    document.getElementById('stat-voice').innerText = data.stats.voiceRepliesSent || 0;
+                }
+            } else {
+                // Not Connected / Connecting
+                statsContainer.classList.add('hidden');
+                statusIconContainer.className = "w-20 h-20 rounded-full flex items-center justify-center text-4xl relative z-10 transition-all duration-500";
                 
-                statusBadge.classList.add('bg-rose-500/10', 'text-rose-400');
-                statusBadge.querySelector('span').className = "w-2 h-2 rounded-full bg-rose-500 animate-ping";
-                statusBadge.querySelector('span:last-child').innerText = "غير متصل";
-                
-                statusIconContainer.classList.add('bg-rose-500/10', 'text-rose-500', 'glow-red');
-                statusIcon.classList.add('fa-triangle-exclamation');
-                
-                glowBg.classList.add('from-rose-500', 'to-red-500');
-                
-                statusActions.classList.add('hidden');
-                connectHandlerCard.classList.remove('hidden');
-                testCard.classList.add('opacity-50', 'pointer-events-none');
-            } else { // Connecting / Error
-                statusTitle.innerText = "جاري التحقق... ⏳";
-                statusDesc.innerText = "يرجى الانتظار، جاري محاولة الاتصال بالخادم الرئيسي لباقة الواتساب.";
-                
-                statusBadge.classList.add('bg-amber-500/10', 'text-amber-400');
-                statusBadge.querySelector('span').className = "w-2 h-2 rounded-full bg-amber-500 animate-ping";
-                statusBadge.querySelector('span:last-child').innerText = "اتصال";
-                
-                statusIconContainer.classList.add('bg-amber-500/10', 'text-amber-500');
-                statusIcon.classList.add('fa-circle-notch', 'animate-spin');
-                
-                statusActions.classList.add('hidden');
-                connectHandlerCard.classList.add('hidden');
-                testCard.classList.add('opacity-50', 'pointer-events-none');
+                if (state === 'DISCONNECTED') {
+                    statusTitle.innerText = "غير متصل 🔴";
+                    statusDesc.innerText = "يرجى ربط حساب واتساب لتفعيل الجسر واستلام الرسائل.";
+                    
+                    statusBadge.classList.add('bg-rose-500/10', 'text-rose-400');
+                    statusBadge.querySelector('span').className = "w-2 h-2 rounded-full bg-rose-500 animate-ping";
+                    statusBadge.querySelector('span:last-child').innerText = "غير متصل";
+                    
+                    statusIconContainer.classList.add('bg-rose-500/10', 'text-rose-500', 'glow-red');
+                    statusIconContainer.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
+                    
+                    glowBg.classList.add('from-rose-500', 'to-red-500');
+                    
+                    statusActions.classList.add('hidden');
+                    connectHandlerCard.classList.remove('hidden');
+                    testCard.classList.add('opacity-50', 'pointer-events-none');
+                } else { // Connecting / Error
+                    statusTitle.innerText = "جاري التحقق... ⏳";
+                    statusDesc.innerText = "يرجى الانتظار، جاري محاولة الاتصال بالخادم الرئيسي لباقة الواتساب.";
+                    
+                    statusBadge.classList.add('bg-amber-500/10', 'text-amber-400');
+                    statusBadge.querySelector('span').className = "w-2 h-2 rounded-full bg-amber-500 animate-ping";
+                    statusBadge.querySelector('span:last-child').innerText = "اتصال";
+                    
+                    statusIconContainer.classList.add('bg-amber-500/10', 'text-amber-500');
+                    statusIconContainer.innerHTML = '<i class="fa-solid fa-circle-notch animate-spin text-amber-500"></i>';
+                    
+                    statusActions.classList.add('hidden');
+                    connectHandlerCard.classList.add('hidden');
+                    testCard.classList.add('opacity-50', 'pointer-events-none');
+                }
+            }
+        }
+
+        function renderLogs(logs) {
+            const container = document.getElementById('logs-container');
+            if (logs && logs.length > 0) {
+                container.innerHTML = logs.map(log => {
+                    let color = 'text-slate-400';
+                    let icon = 'fa-info-circle';
+                    
+                    if (log.type === 'incoming') { color = 'text-sky-400'; icon = 'fa-arrow-down-long'; }
+                    else if (log.type === 'outgoing') { color = 'text-emerald-400'; icon = 'fa-arrow-up-long'; }
+                    else if (log.type === 'success') { color = 'text-green-400'; icon = 'fa-circle-check'; }
+                    else if (log.type === 'warning') { color = 'text-amber-400'; icon = 'fa-triangle-exclamation'; }
+                    else if (log.type === 'error') { color = 'text-red-400'; icon = 'fa-circle-xmark'; }
+                    
+                    return `<div class="flex items-start space-x-2 space-x-reverse py-1 border-b border-slate-800/20 last:border-0">
+                        <span class="text-slate-500 shrink-0 font-mono select-none">${log.timestamp}</span>
+                        <span class="${color} shrink-0 mt-0.5"><i class="fa-solid ${icon}"></i></span>
+                        <span class="text-slate-300 break-all leading-normal">${log.message}</span>
+                    </div>`;
+                }).join('');
+            } else {
+                container.innerHTML = '<p class="text-slate-500 text-center py-12">لا توجد أحداث مسجلة بعد...</p>';
             }
         }
 
         async function updateConfig() {
             const aiVal = document.getElementById('toggle-ai').checked;
             const voiceVal = document.getElementById('toggle-voice').checked;
+            const transcribeVal = document.getElementById('toggle-transcribe').checked;
+            const visionVal = document.getElementById('toggle-vision').checked;
             
             try {
                 await fetch('/config', {
@@ -320,7 +440,9 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         ai_auto_reply: aiVal,
-                        ai_voice_reply: voiceVal
+                        ai_voice_reply: voiceVal,
+                        ai_transcribe_voice: transcribeVal,
+                        ai_image_vision: visionVal
                     })
                 });
                 console.log("Config updated successfully.");
@@ -361,7 +483,6 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ chat_id: 'webapp' })
                 });
-                // Alert or display loading
                 checkStatus(true);
             } catch (err) {
                 alert("فشل بدء عملية توليد الرمز: " + err.message);

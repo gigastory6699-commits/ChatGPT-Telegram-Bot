@@ -20,6 +20,19 @@ let telegramChatId = null;
 let reconnectTimeout = null;
 let aiAutoReply = false;
 let aiVoiceReply = false;
+let aiTranscribeVoice = true;
+let aiImageVision = true;
+let profilePicUrl = null;
+let stats = { repliesSent: 0, voiceRepliesSent: 0, messagesReceived: 0 };
+let liveLogs = [];
+
+function addLog(type, message) {
+    const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    liveLogs.unshift({ timestamp, type, message });
+    if (liveLogs.length > 20) {
+        liveLogs.pop();
+    }
+}
 
 // Load AI auto-reply config if exists
 try {
@@ -27,7 +40,9 @@ try {
         const configData = JSON.parse(fs.readFileSync('session/config.json', 'utf-8'));
         aiAutoReply = !!configData.ai_auto_reply;
         aiVoiceReply = !!configData.ai_voice_reply;
-        console.log("Loaded WhatsApp bridge config, AI Auto-Reply:", aiAutoReply, "AI Voice Reply:", aiVoiceReply);
+        if (configData.ai_transcribe_voice !== undefined) aiTranscribeVoice = !!configData.ai_transcribe_voice;
+        if (configData.ai_image_vision !== undefined) aiImageVision = !!configData.ai_image_vision;
+        console.log("Loaded WhatsApp bridge config, AI Auto-Reply:", aiAutoReply, "AI Voice Reply:", aiVoiceReply, "Transcribe:", aiTranscribeVoice, "Vision:", aiImageVision);
     }
 } catch (e) {
     console.error("Failed to load config on startup:", e.message);
@@ -367,8 +382,14 @@ async function initWhatsApp(chatId, pairPhone = null, forceNewSession = false) {
         const { connection, lastDisconnect, qr } = update;
         console.log("Connection update:", { connection, lastDisconnect: lastDisconnect ? lastDisconnect.message : null, qr: !!qr });
         
+        if (connection === 'connecting') {
+            connectionState = 'CONNECTING';
+            addLog('info', 'جاري محاولة الاتصال بسيرفرات واتساب...');
+        }
+        
         if (qr) {
             qrCode = qr;
+            addLog('info', 'تم توليد رمز QR جديد لربط الحساب');
             try {
                 await QRCode.toFile('./session/qr.png', qr);
                 console.log("QR code saved to session/qr.png");
@@ -382,6 +403,8 @@ async function initWhatsApp(chatId, pairPhone = null, forceNewSession = false) {
             console.log('Connection closed. Reconnecting:', shouldReconnect);
             sock = null;
             connectionState = 'DISCONNECTED';
+            profilePicUrl = null;
+            addLog('warning', `تم إغلاق الاتصال. إعادة المحاولة: ${shouldReconnect}`);
             if (shouldReconnect) {
                 if (!reconnectTimeout) {
                     reconnectTimeout = setTimeout(() => {
@@ -391,6 +414,7 @@ async function initWhatsApp(chatId, pairPhone = null, forceNewSession = false) {
                 }
             } else {
                 console.log("Logged out from WhatsApp. Clearing session credentials.");
+                addLog('error', 'تم تسجيل الخروج من جهاز الواتساب. جاري مسح ملفات الجلسة.');
                 if (fs.existsSync('session/creds.json')) {
                     try {
                         fs.unlinkSync('session/creds.json');
@@ -403,6 +427,23 @@ async function initWhatsApp(chatId, pairPhone = null, forceNewSession = false) {
             console.log('WhatsApp connection opened successfully!');
             connectionState = 'CONNECTED';
             qrCode = null;
+            
+            const myName = sock.user.name || 'مستخدم واتساب';
+            const myPhone = sock.user.id.split(':')[0].split('@')[0];
+            addLog('success', `تم ربط الحساب وفتح الاتصال بنجاح! الحساب المرتبط: ${myName} (${myPhone})`);
+            
+            // Fetch profile picture URL asynchronously
+            try {
+                sock.profilePictureUrl(sock.user.id, 'image')
+                    .then(url => { 
+                        profilePicUrl = url;
+                        addLog('info', 'تم تحميل الصورة الشخصية للحساب بنجاح.');
+                    })
+                    .catch(err => { profilePicUrl = null; });
+            } catch (e) {
+                profilePicUrl = null;
+            }
+            
             sendTelegramMessage("✅ <b>تم ربط واتساب بنجاح!</b>\nالبوت متصل الآن ويمكنه استقبال وإرسال رسائل واتساب.");
         }
     });
